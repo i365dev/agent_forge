@@ -3,7 +3,7 @@
 [![CI](https://github.com/i365dev/agent_forge/actions/workflows/ci.yml/badge.svg)](https://github.com/i365dev/agent_forge/actions/workflows/ci.yml)
 [![Hex.pm](https://img.shields.io/hexpm/v/agent_forge.svg)](https://hex.pm/packages/agent_forge)
 [![Docs](https://img.shields.io/badge/hex-docs-blue.svg)](https://hexdocs.pm/agent_forge)
-[![License](https://img.shields.io/hexpm/l/agent_forge.svg)](https://github.com/i365dev/agent_forge/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/i365dev/agent_forge/blob/main/LICENSE)
 
 AgentForge is a lightweight, signal-driven workflow framework for Elixir, designed for building flexible and maintainable data processing pipelines.
 
