@@ -1,28 +1,41 @@
 defmodule AgentForge.MixProject do
   use Mix.Project
 
+  @source_url "https://github.com/USERNAME/agent_forge"
+  @version "0.1.0"
+
   def project do
     [
       app: :agent_forge,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      # Add test coverage configuration
+      # Test coverage configuration
       test_coverage: [tool: ExCoveralls],
       preferred_cli_env: [
         coveralls: :test,
         "coveralls.detail": :test,
         "coveralls.post": :test,
-        "coveralls.html": :test
-      ]
+        "coveralls.html": :test,
+        "coveralls.github": :test
+      ],
+      # Hex.pm package configuration
+      description: "A lightweight, signal-driven workflow framework for building dynamic systems",
+      package: package(),
+      # Documentation configuration
+      name: "AgentForge",
+      docs: docs(),
+      homepage_url: @source_url,
+      source_url: @source_url
     ]
   end
 
   def application do
     [
-      extra_applications: [:logger, :crypto],
-      mod: {AgentForge.Application, []}
+      mod: {AgentForge.Application, []},
+      extra_applications: [:logger, :crypto, :yaml_elixir, :jason],
+      env: [default_store_name: AgentForge.Store]
     ]
   end
 
@@ -31,7 +44,52 @@ defmodule AgentForge.MixProject do
       {:jason, "~> 1.4"},
       {:excoveralls, "~> 0.18", only: :test},
       {:yaml_elixir, "~> 2.9"},  # YAML support
-      {:meck, "~> 0.9", only: :test}  # For mocking in tests
+      {:meck, "~> 0.9", only: :test},  # For mocking in tests
+      {:ex_doc, "~> 0.29", only: :dev, runtime: false}
+    ]
+  end
+
+  defp package do
+    [
+      name: "agent_forge",
+      files: ~w(lib mix.exs README.md LICENSE CHANGELOG.md),
+      licenses: ["MIT"],
+      links: %{"GitHub" => @source_url}
+    ]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      extras: ["README.md", "CHANGELOG.md", "LICENSE"] ++ Path.wildcard("guides/*.md"),
+      extra_section: "GUIDES",
+      groups_for_extras: [
+        "Guides": Path.wildcard("guides/*.md")
+      ],
+      groups_for_modules: [
+        "Core": [
+          AgentForge,
+          AgentForge.Signal,
+          AgentForge.Flow,
+          AgentForge.Store
+        ],
+        "Primitives": [
+          AgentForge.Primitives
+        ],
+        "Dynamic Flows": [
+          AgentForge.DynamicFlow
+        ],
+        "Configuration": [
+          AgentForge.Config
+        ],
+        "Utilities": [
+          AgentForge.Debug,
+          AgentForge.Tools,
+          AgentForge.Runtime
+        ]
+      ],
+      source_url: @source_url,
+      source_ref: "v#{@version}"
     ]
   end
 end

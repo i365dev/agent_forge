@@ -1,5 +1,10 @@
 # AgentForge
 
+[![CI](https://github.com/USERNAME/agent_forge/actions/workflows/ci.yml/badge.svg)](https://github.com/USERNAME/agent_forge/actions/workflows/ci.yml)
+[![Hex.pm](https://img.shields.io/hexpm/v/agent_forge.svg)](https://hex.pm/packages/agent_forge)
+[![Docs](https://img.shields.io/badge/hex-docs-blue.svg)](https://hexdocs.pm/agent_forge)
+[![License](https://img.shields.io/hexpm/l/agent_forge.svg)](https://github.com/USERNAME/agent_forge/blob/main/LICENSE)
+
 AgentForge is a lightweight, signal-driven workflow framework for Elixir, designed for building flexible and maintainable data processing pipelines.
 
 ```mermaid
@@ -116,15 +121,46 @@ AgentForge focuses on:
 - ✅ Async Task Orchestration
 - ✅ Business Process Automation
 
+## Development
+
+### Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/USERNAME/agent_forge.git
+cd agent_forge
+
+# Get dependencies
+mix deps.get
+
+# Run tests
+mix test
+
+# Generate documentation
+mix docs
+```
+
+### Pre-release Checklist
+
+- [ ] All tests pass (`mix test`)
+- [ ] Test coverage is acceptable (`mix coveralls.html` - check coverage/excoveralls.html)
+- [ ] Code is formatted (`mix format`)
+- [ ] Documentation generates without errors (`mix docs`)
+- [ ] Version number is correct in mix.exs
+- [ ] CHANGELOG.md is updated
+- [ ] GitHub Actions workflows are in place
+- [ ] All examples run without errors
+
 ## Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for guidelines.
 
 1. Fork the repository
-2. Create your feature branch
-3. Run tests (`mix test`)
-4. Update documentation
-5. Submit a pull request
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Run the tests (`mix test`)
+4. Commit your changes (`git commit -m 'Add some amazing feature'`)
+5. Push to the branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
 
 ## License
 
