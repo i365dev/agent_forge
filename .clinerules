@@ -1,0 +1,292 @@
+# AgentForge Development Guidelines
+
+## Project Philosophy & Scope
+
+AgentForge is a lightweight, signal-driven workflow framework designed for personal projects. Its core design principles are:
+
+- **Simplicity First**: Maintain a minimal, clean codebase that's easy to understand and extend
+- **Focused Functionality**: Implement only what's needed for the defined use cases
+- **Progressive Complexity**: Start with a minimal core and add features incrementally
+- **Personal Use**: Optimized for individual developer usage, not enterprise-scale requirements
+
+This is NOT an enterprise framework - it prioritizes developer experience and flexibility over industrial-grade guarantees.
+
+## System Architecture
+
+### Core Architecture Diagram
+
+```mermaid
+graph TB
+    subgraph "AgentForge Core"
+        Signal[Signal] --> Handler[Handler]
+        Handler --> Store[Store]
+        Handler --> Flow[Flow]
+        Flow --> Runtime[Runtime]
+    end
+    
+    subgraph "Phase 2: Primitives"
+        Primitives[Primitives] --> PHandler[PrimitiveHandler]
+        Config[Config] --> PHandler
+    end
+    
+    subgraph "Applications"
+        App1[LLMAgent] --> AgentForge
+        App2[MarketEvents] --> AgentForge
+        App3[myFeeder] --> AgentForge
+    end
+    
+    AgentForge[AgentForge Core] --> App1
+    AgentForge --> App2
+    AgentForge --> App3
+    Primitives --> AgentForge
+```
+
+### Core Data Flow
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Flow as AgentForge.Flow
+    participant HandlerA as Handler A
+    participant HandlerB as Handler B
+    participant Store as State Store
+    
+    App->>Flow: process(flow, signal, state)
+    Flow->>Store: get initial state
+    Flow->>HandlerA: execute(signal, state)
+    HandlerA->>Store: read/update state
+    HandlerA-->>Flow: {emit, new_signal, new_state}
+    Flow->>HandlerB: execute(new_signal, new_state)
+    HandlerB->>Store: read/update state
+    HandlerB-->>Flow: {halt, result, final_state}
+    Flow-->>App: {result, final_state}
+```
+
+## Architecture Guidelines
+
+### Core Components
+
+Follow these component responsibilities strictly:
+
+1. **Signal**: The fundamental unit of communication, keep it simple but with metadata support
+   - Avoid adding complex processing logic here
+   - Focus on clear, immutable data structures
+
+2. **Handler**: Single-purpose processors that transform signals
+   - Follow the function signature: `(signal, state) -> {signal_result, state}`
+   - Keep handlers small and focused on a single responsibility
+
+3. **Store**: Simple state container with basic operations
+   - Avoid complex state management patterns
+   - Focus on the core operations: get, put, update, delete
+
+4. **Flow**: Composes handlers into processing pipelines
+   - Keep the composition mechanism straightforward
+   - Avoid complex routing logic
+
+5. **Runtime**: Manages flow execution
+   - Keep it lightweight
+   - Focus on the minimal functionality needed
+
+### Development Phases
+
+When implementing features, follow the phased approach:
+
+1. **Phase 1**: Core signal-driven framework (~450 LOC total)
+   - Focus on the minimal viable implementation
+   - Prioritize clarity over optimization
+
+2. **Phase 2**: Declarative primitives system (when Phase 1 is stable)
+   - Add only after Phase 1 is well-tested and stable
+   - Keep the primitive set minimal but expressive
+
+3. **Phase 3**: Dynamic handler generation (experimental)
+   - Consider this exploratory
+   - Maintain security boundaries for code execution
+
+## Elixir Coding Standards
+
+### General Principles
+
+- **Functional Approach**: Embrace functional programming patterns
+- **Immutability**: Treat all data as immutable
+- **Explicit Over Implicit**: Favor explicit function calls over metaprogramming
+- **Composition**: Build complex behavior through function composition
+- **All English**: All code, comments, and documentation should be in English
+
+### Specific Guidelines
+
+1. **Module Structure**:
+   - Group related functions together
+   - Public functions first, private functions after
+   - Use module attributes for constants
+
+2. **Function Style**:
+   - Keep functions small (<20 lines where possible)
+   - Use pattern matching over conditional logic
+   - Return tagged tuples for results: `{:ok, result}` or `{:error, reason}`
+
+3. **Variable Naming**:
+   - Use snake_case for variables and functions
+   - Use descriptive names that convey purpose
+   - Avoid single-letter variables except in very short functions
+
+4. **Pipeline Style**:
+   - Use the pipe operator (`|>`) for data transformations
+   - Maintain consistent indentation in pipelines
+   - Break long pipelines into multiple lines
+
+### Code Example Style
+
+```elixir
+# Module structure example
+defmodule AgentForge.Signal do
+  @moduledoc """
+  Handles creation and manipulation of signals in the AgentForge system.
+  Signals are the fundamental unit of communication.
+  """
+  
+  @doc """
+  Creates a new signal with the given type and data.
+  
+  ## Examples
+      iex> AgentForge.Signal.new(:user_message, "Hello")
+      %{type: :user_message, data: "Hello", meta: %{timestamp: ~U[2025-03-22 10:00:00Z]}}
+  """
+  def new(type, data, meta \\ %{}) do
+    %{
+      type: type,
+      data: data,
+      meta: Map.merge(%{timestamp: DateTime.utc_now()}, meta)
+    }
+  end
+  
+  # More public functions...
+  
+  defp internal_helper(args) do
+    # Implementation
+  end
+end
+```
+
+## Testing Approach
+
+For this lightweight personal project, focus on:
+
+1. **Core Component Tests**: Ensure the basic functionality of each core component works
+   - Test the public API of each module
+   - Focus on happy paths and critical error cases
+
+2. **Integration Tests**: Add minimal integration tests for common workflows
+   - Verify that the components work together as expected
+   - Test at least one end-to-end flow per phase
+
+3. **Test Coverage**: Aim for ~70% coverage of core modules
+   - Don't aim for 100% coverage
+   - Prioritize testing the most used and critical paths
+
+4. **Test Style**:
+   - Use descriptive test names that explain the behavior being tested
+   - Group related tests together
+   - Keep test setups simple
+
+## Documentation Requirements
+
+1. **Module Documentation**: Every module should have a `@moduledoc` explaining its purpose
+   - Keep it concise but informative
+   - Include usage examples where helpful
+
+2. **Function Documentation**: Public functions should have `@doc` comments
+   - Include a brief description
+   - Add examples for non-trivial functions
+   - Document parameters and return values
+
+3. **Architecture Documentation**: Maintain a high-level architecture overview
+   - Update when adding major components
+   - Keep diagrams simple and focused
+
+## Error Handling Strategy
+
+1. **Graceful Degradation**: Handlers should recover from errors, not crash
+   - Convert exceptions to error signals where possible
+   - Provide meaningful error messages
+
+2. **Simple Error Patterns**: Use these patterns consistently:
+   - Return `{:emit, error_signal, state}` for recoverable errors
+   - Use tagged tuples like `{:error, reason}` for function returns
+   - Avoid complex error hierarchies
+
+3. **Logging**: Use consistent logging patterns
+   - Log errors with context for debugging
+   - Keep logs informative but concise
+
+## Performance Considerations
+
+For this personal project:
+
+1. **Clarity Over Optimization**: Prioritize readable, maintainable code
+   - Avoid premature optimization
+   - Only optimize after identifying actual bottlenecks
+
+2. **Reasonable Limits**: Design with reasonable constraints in mind
+   - AgentForge is not designed for high-throughput systems
+   - Target workflows with hundreds, not millions, of signals per minute
+
+3. **Memory Usage**: Be mindful of memory usage in long-running processes
+   - Avoid accumulating large amounts of state
+   - Consider implementing simple pruning mechanisms for historical data
+
+## Implementation Examples
+
+### Basic Handler Implementation
+
+```mermaid
+sequenceDiagram
+    participant Signal as Input Signal
+    participant Handler as Message Handler
+    participant Store as State Store
+    participant Output as Output Signal
+    
+    Signal->>Handler: signal = %{type: :user_message, data: "Hello"}
+    Handler->>Store: state = get(:last_message)
+    Handler->>Store: put(:last_message, "Hello")
+    Handler->>Output: {:emit, %{type: :llm_request, data: "Generate response"}}
+```
+
+### Primitives Usage Example (Phase 2)
+
+```mermaid
+flowchart TD
+    Start[Start] --> Tool1[Tool: fetch_data]
+    Tool1 --> Branch{Branch: data.important?}
+    Branch -->|Yes| Tool2[Tool: analyze_data]
+    Branch -->|No| Skip[Skip]
+    Tool2 --> Notify[Notify: send_results]
+    Skip --> End[End]
+    Notify --> End
+```
+
+### Primitive Flow Execution
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Flow as AgentForge.Flow
+    participant PHandler as PrimitiveHandler
+    participant Tool as Tool Registry
+    participant Store as State Store
+    
+    App->>Flow: process(flow, primitive, state)
+    Flow->>PHandler: handle(primitive, state)
+    
+    alt Tool Primitive
+        PHandler->>Tool: execute(tool_name, args)
+        Tool-->>PHandler: result
+        PHandler-->>Flow: {emit, next_signal, new_state}
+    else Branch Primitive
+        PHandler->>PHandler: evaluate_condition(condition, state)
+        PHandler->>Flow: process(then_branch or else_branch)
+    end
+    
+    Flow-->>App: {result, final_state}
+```
