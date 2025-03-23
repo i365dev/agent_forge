@@ -160,13 +160,21 @@ defmodule AgentForge.Primitives do
   def wait(condition, opts \\ []) when is_function(condition, 2) do
     timeout = Keyword.get(opts, :timeout, 5000)
     retry_interval = Keyword.get(opts, :retry_interval, 100)
+    start_time = :os.system_time(:millisecond)
 
     fn signal, state ->
-      if condition.(signal, state) do
-        {{:emit, signal}, state}
-      else
-        Process.sleep(retry_interval)
-        {{:wait, "Waiting for condition to be met"}, state}
+      current_time = :os.system_time(:millisecond)
+      elapsed_time = current_time - start_time
+
+      cond do
+        condition.(signal, state) ->
+          {{:emit, signal}, state}
+        elapsed_time >= timeout ->
+          {{:emit, Signal.new(:error, "Wait operation timed out after #{timeout}ms")}, state}
+        true ->
+          Process.sleep(retry_interval)
+          # Keep original message format for backward compatibility
+          {{:wait, "Waiting for condition to be met"}, state}
       end
     end
   end
