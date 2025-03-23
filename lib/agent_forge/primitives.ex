@@ -169,8 +169,10 @@ defmodule AgentForge.Primitives do
       cond do
         condition.(signal, state) ->
           {{:emit, signal}, state}
+
         elapsed_time >= timeout ->
           {{:emit, Signal.new(:error, "Wait operation timed out after #{timeout}ms")}, state}
+
         true ->
           Process.sleep(retry_interval)
           # Keep original message format for backward compatibility

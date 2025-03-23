@@ -1,6 +1,6 @@
 # AgentForge
 
-[![CI](https://github.com/i365dev/agent_forge/actions/workflows/ci.yml/badge.svg)](https://github.com/USERNAME/agent_forge/actions/workflows/ci.yml)
+[![CI](https://github.com/i365dev/agent_forge/actions/workflows/ci.yml/badge.svg)](https://github.com/i365dev/agent_forge/actions/workflows/ci.yml)
 [![Hex.pm](https://img.shields.io/hexpm/v/agent_forge.svg)](https://hex.pm/packages/agent_forge)
 [![Docs](https://img.shields.io/badge/hex-docs-blue.svg)](https://hexdocs.pm/agent_forge)
 [![License](https://img.shields.io/hexpm/l/agent_forge.svg)](https://github.com/i365dev/agent_forge/blob/main/LICENSE)
