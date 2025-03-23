@@ -1,59 +1,131 @@
 # AgentForge
 
-## Description
+AgentForge is a lightweight, signal-driven workflow framework for Elixir, designed for building flexible and maintainable data processing pipelines.
 
-AgentForge is a powerful and flexible signal-driven workflow framework designed for building intelligent, dynamic, and adaptive systems. With "signal flow" as its core abstraction, AgentForge enables the construction of complex workflows through composable handler chains and persistent state management, making sophisticated systems simpler and more elegant to build. What makes AgentForge unique is its ability to support AI-driven dynamic workflow creation, allowing systems to adapt execution paths in real-time based on environmental changes and new information.
+```mermaid
+graph TB
+    Signal[Signal] --> Handler[Handler]
+    Handler --> Store[Store]
+    Handler --> Flow[Flow]
+    Flow --> Runtime[Runtime]
+```
 
-### Core Design Philosophy
+## Features
 
-- **Signal-Driven Architecture**: All interactions are modeled as flows and transformations of signals
-- **State Persistence**: Maintain context and working state across processing steps
-- **Composable Handlers**: Build complex behaviors by combining simple handlers
-- **Primitives System**: Provide powerful primitives for expressing complex logic and control flows
-- **Dynamic Workflows**: Support runtime workflow creation and adjustment
+- 🔄 **Signal-driven Architecture**: Build workflows around immutable signals
+- 🧩 **Composable Primitives**: Core building blocks for common patterns
+- 🔀 **Flexible Flows**: Chain handlers into dynamic processing pipelines
+- 📦 **State Management**: Track and update workflow state
+- ⚡ **Async Support**: Handle asynchronous operations
+- 🛠 **Configuration-based**: Define workflows in YAML
+- 💪 **Type-safe**: Leverages Elixir's pattern matching
 
-### Key Features
-
-- **High Abstraction**: Unified interface for handling various types of signals and data
-- **Unlimited Extensibility**: Easy addition of new handlers, signal types, and integration points
-- **Intelligent Decision Making**: Support for AI-driven branching decisions and path discovery
-- **Expressive Power**: Primitives system supporting conditional logic, loops, and transformations
-- **Fault Isolation**: Handler isolation design prevents cascading failures
-- **Optimized Performance**: High concurrency processing capabilities based on Elixir/OTP
-
-### Application Scenarios
-
-AgentForge transcends traditional workflow engines, suitable for a wide range of scenarios requiring intelligence and adaptability:
-
-- **Intelligent Conversation Systems**: Build conversational agents that dynamically adjust to user needs
-- **Market Monitoring Systems**: Create adaptive event monitoring and analysis pipelines
-- **Information Processing Bots**: Develop flexible, configurable information collection and processing systems
-- **Research Analysis Tools**: Implement multi-step, adaptive data analysis workflows
-- **Automated Decision Systems**: Build systems that can make autonomous decisions based on changing environments
-- **Task Orchestration Platforms**: Support intelligent orchestration of complex, multi-stage tasks
-- **Smart Learning Systems**: Develop educational systems that dynamically adjust based on learning progress
-
-### Distinction from Traditional Workflow Engines
-
-Traditional workflow engines are based on predefined paths and fixed decision points, whereas AgentForge allows workflows themselves to evolve and adapt at runtime. This paradigm shift enables systems to handle unforeseen situations and discover innovative solutions, rather than being limited to paths envisioned by designers.
-
-AgentForge's core abstractions (signals, handlers, stores, flows) combined with its primitives system provide an ideal foundation for building the next generation of intelligent systems.
-
-## Usage
-
-### Installation
-
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `agent_forge` to your list of dependencies in `mix.exs`:
+## Quick Start
 
 ```elixir
+# Add to mix.exs
 def deps do
   [
     {:agent_forge, "~> 0.1.0"}
   ]
 end
+
+# Run
+mix deps.get
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/agent_forge>.
+### Simple Example
+
+```elixir
+defmodule Example do
+  alias AgentForge.{Flow, Signal, Primitives}
+
+  def run do
+    # Define workflow steps
+    validate = Primitives.transform(fn data ->
+      if data.valid?, do: data, else: raise "Invalid data"
+    end)
+
+    process = Primitives.transform(fn data ->
+      Map.put(data, :processed, true)
+    end)
+
+    notify = Primitives.notify(
+      [:console],
+      format: &("Processed: #{inspect(&1)}")
+    )
+
+    # Compose workflow
+    workflow = [validate, process, notify]
+
+    # Execute
+    signal = Signal.new(:start, %{valid?: true})
+    {:ok, result, _state} = Flow.process(workflow, signal, %{})
+    IO.inspect(result)
+  end
+end
+```
+
+## Core Components
+
+### Signals
+Immutable messages that flow through the system:
+```elixir
+signal = Signal.new(:user_action, %{id: 1})
+```
+
+### Primitives
+Building blocks for common patterns:
+- **Branch**: Conditional processing
+- **Transform**: Data modification
+- **Loop**: Iteration handling
+- **Wait**: Async operations
+- **Notify**: Event notifications
+
+### Flows
+Compose handlers into pipelines:
+```elixir
+workflow = [&validate/2, &process/2, &notify/2]
+```
+
+## Documentation
+
+- [Getting Started Guide](guides/getting_started.md)
+- [Core Concepts](guides/core_concepts.md)
+- [Contribution Guidelines](CONTRIBUTING.md)
+
+## Examples
+
+- [Data Processing](examples/data_processing.exs): Basic data transformation pipeline
+- [Async Workflow](examples/async_workflow.exs): Handling async operations
+- [Configuration-based](examples/config_workflow.exs): YAML-defined workflows
+
+## Design Philosophy
+
+AgentForge focuses on:
+- **Simplicity**: Clean, understandable codebase
+- **Flexibility**: Adaptable to various use cases
+- **Maintainability**: Well-documented, tested code
+- **Composability**: Build complex flows from simple parts
+
+## Use Cases
+
+- ✅ Data Processing Pipelines
+- ✅ Event-driven Workflows
+- ✅ Multi-step Validations
+- ✅ Async Task Orchestration
+- ✅ Business Process Automation
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for guidelines.
+
+1. Fork the repository
+2. Create your feature branch
+3. Run tests (`mix test`)
+4. Update documentation
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

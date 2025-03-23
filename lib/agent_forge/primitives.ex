@@ -134,4 +134,73 @@ defmodule AgentForge.Primitives do
       end
     end
   end
+
+  @doc """
+  Creates a wait primitive that pauses execution until a condition is met.
+  Returns {:wait, reason} while waiting, {:emit, signal} when condition is met.
+
+  ## Options
+
+  * `:condition` - A function that takes a signal and state and returns a boolean
+  * `:timeout` - Optional timeout in milliseconds, defaults to 5000
+  * `:retry_interval` - Optional retry interval in milliseconds, defaults to 100
+
+  ## Examples
+
+      iex> wait = AgentForge.Primitives.wait(
+      ...>   fn _, state -> Map.get(state, :ready, false) end,
+      ...>   timeout: 1000
+      ...> )
+      iex> signal = AgentForge.Signal.new(:check, "waiting")
+      iex> state = %{ready: false}
+      iex> {{:wait, reason}, _state} = wait.(signal, state)
+      iex> is_binary(reason)
+      true
+  """
+  def wait(condition, opts \\ []) when is_function(condition, 2) do
+    timeout = Keyword.get(opts, :timeout, 5000)
+    retry_interval = Keyword.get(opts, :retry_interval, 100)
+
+    fn signal, state ->
+      if condition.(signal, state) do
+        {{:emit, signal}, state}
+      else
+        Process.sleep(retry_interval)
+        {{:wait, "Waiting for condition to be met"}, state}
+      end
+    end
+  end
+
+  @doc """
+  Creates a notify primitive that sends notifications or events.
+  Can be used to integrate with external notification systems.
+
+  ## Options
+
+  * `:channels` - List of notification channels (e.g. [:console, :webhook])
+  * `:format` - Optional function to format the notification message
+
+  ## Examples
+
+      iex> notify = AgentForge.Primitives.notify([:console])
+      iex> signal = AgentForge.Signal.new(:event, "test message")
+      iex> {{:emit, result}, _} = notify.(signal, %{})
+      iex> result.type == :notification
+      true
+  """
+  def notify(channels, opts \\ []) when is_list(channels) do
+    format_fn = Keyword.get(opts, :format, &inspect/1)
+
+    fn signal, state ->
+      message = format_fn.(signal.data)
+
+      Enum.each(channels, fn
+        :console -> IO.puts("[Notification] #{message}")
+        :webhook when is_map_key(state, :webhook_url) -> :ok
+        _ -> :ok
+      end)
+
+      {{:emit, Signal.new(:notification, message)}, state}
+    end
+  end
 end

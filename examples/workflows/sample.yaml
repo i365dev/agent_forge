@@ -1,0 +1,43 @@
+name: sample_workflow
+description: A sample workflow that processes user data
+
+steps:
+  - name: validate_input
+    type: transform
+    config:
+      validate:
+        - field: name
+          required: true
+        - field: age
+          type: number
+          min: 0
+
+  - name: enrich_data
+    type: transform
+    config:
+      add_fields:
+        - timestamp: now()
+        - processed: true
+
+  - name: check_age
+    type: branch
+    config:
+      condition: "age >= 18"
+      then_flow: adult_flow
+      else_flow: minor_flow
+
+flows:
+  adult_flow:
+    - name: process_adult
+      type: notify
+      config:
+        channels: [console]
+        message: "Processing adult user: {name}"
+
+  minor_flow:
+    - name: process_minor
+      type: notify
+      config:
+        channels: [console]
+        message: "Cannot process minor: {name}"
+        notify_guardian: true

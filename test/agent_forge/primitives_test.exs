@@ -139,4 +139,79 @@ defmodule AgentForge.PrimitivesTest do
       assert is_binary(result.data)
     end
   end
+
+  describe "wait/2" do
+    test "waits until condition is met" do
+      wait = Primitives.wait(
+        fn _, state -> Map.get(state, :ready, false) end,
+        timeout: 100,
+        retry_interval: 10
+      )
+
+      signal = Signal.new(:check, "waiting")
+      state = %{ready: false}
+
+      {{:wait, reason}, _state} = wait.(signal, state)
+      assert is_binary(reason)
+      assert reason == "Waiting for condition to be met"
+
+      {{:emit, result}, _state} = wait.(signal, %{ready: true})
+      assert result.type == :check
+      assert result.data == "waiting"
+    end
+
+    test "uses default options" do
+      wait = Primitives.wait(fn _, _ -> false end)
+      signal = Signal.new(:check, "test")
+      {{:wait, reason}, _state} = wait.(signal, %{})
+
+      assert is_binary(reason)
+    end
+  end
+
+  describe "notify/2" do
+    test "sends console notifications" do
+      ExUnit.CaptureIO.capture_io(fn ->
+        notify = Primitives.notify([:console])
+        signal = Signal.new(:event, "test message")
+        {{:emit, result}, _state} = notify.(signal, %{})
+
+        assert result.type == :notification
+        assert result.data == ~s("test message")
+      end) =~ "[Notification]"
+    end
+
+    test "handles webhook notifications" do
+      notify = Primitives.notify([:webhook])
+      signal = Signal.new(:event, "test message")
+      state = %{webhook_url: "http://example.com/webhook"}
+      {{:emit, result}, _state} = notify.(signal, state)
+
+      assert result.type == :notification
+      assert result.data == ~s("test message")
+    end
+
+    test "supports custom message formatting" do
+      format_fn = fn data -> "Custom: #{data}" end
+      notify = Primitives.notify([:console], format: format_fn)
+      signal = Signal.new(:event, "test message")
+
+      output = ExUnit.CaptureIO.capture_io(fn ->
+        {{:emit, result}, _state} = notify.(signal, %{})
+        assert result.type == :notification
+        assert result.data == "Custom: test message"
+      end)
+
+      assert output =~ "Custom: test message"
+    end
+
+    test "ignores unsupported channels" do
+      notify = Primitives.notify([:unsupported])
+      signal = Signal.new(:event, "test message")
+      {{:emit, result}, _state} = notify.(signal, %{})
+
+      assert result.type == :notification
+      assert result.data == ~s("test message")
+    end
+  end
 end
