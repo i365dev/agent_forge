@@ -11,6 +11,9 @@ Code.require_file("lib/agent_forge/flow.ex")
 Code.require_file("lib/agent_forge/primitives.ex")
 Code.require_file("lib/agent_forge/config.ex")
 
+# Add the YamlElixir application
+Application.ensure_all_started(:yaml_elixir)
+
 defmodule ConfigWorkflow do
   alias AgentForge.{Flow, Signal, Primitives}
 
@@ -103,8 +106,25 @@ defmodule ConfigWorkflow do
   end
 
   def load_workflow(path) do
-    # In a real implementation, this would use a proper YAML parser
-    # For this example, we'll use the sample workflow directly
+    if File.exists?(path) do
+      case YamlElixir.read_from_file(path) do
+        {:ok, workflow} -> workflow
+        {:error, reason} ->
+          IO.puts("Error reading YAML file: #{inspect(reason)}")
+          IO.puts("Using default workflow configuration.")
+          # Use the hard-coded workflow directly
+          default_workflow()
+      end
+    else
+      IO.puts("Warning: YAML file not found at #{path}")
+      IO.puts("Using default workflow configuration.")
+      # Use the hard-coded workflow directly
+      default_workflow()
+    end
+  end
+
+  # Hard-coded sample workflow for demonstration
+  defp default_workflow do
     %{
       "steps" => [
         %{
