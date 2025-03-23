@@ -43,8 +43,10 @@ defmodule AgentForge.MixProject do
     [
       {:jason, "~> 1.4"},
       {:excoveralls, "~> 0.18", only: :test},
-      {:yaml_elixir, "~> 2.9"},  # YAML support
-      {:meck, "~> 0.9", only: :test},  # For mocking in tests
+      # YAML support
+      {:yaml_elixir, "~> 2.9"},
+      # For mocking in tests
+      {:meck, "~> 0.9", only: :test},
       {:ex_doc, "~> 0.29", only: :dev, runtime: false}
     ]
   end
@@ -64,25 +66,25 @@ defmodule AgentForge.MixProject do
       extras: ["README.md", "CHANGELOG.md", "LICENSE"] ++ Path.wildcard("guides/*.md"),
       extra_section: "GUIDES",
       groups_for_extras: [
-        "Guides": Path.wildcard("guides/*.md")
+        Guides: Path.wildcard("guides/*.md")
       ],
       groups_for_modules: [
-        "Core": [
+        Core: [
           AgentForge,
           AgentForge.Signal,
           AgentForge.Flow,
           AgentForge.Store
         ],
-        "Primitives": [
+        Primitives: [
           AgentForge.Primitives
         ],
         "Dynamic Flows": [
           AgentForge.DynamicFlow
         ],
-        "Configuration": [
+        Configuration: [
           AgentForge.Config
         ],
-        "Utilities": [
+        Utilities: [
           AgentForge.Debug,
           AgentForge.Tools,
           AgentForge.Runtime

@@ -19,10 +19,13 @@ defmodule AgentForge.DebugTest do
       debug_handler = Debug.trace_handler("test", handler)
       signal = Signal.new(:test, "data")
 
-      log = strip_color(capture_log(fn ->
-        {result, _state} = debug_handler.(signal, %{})
-        assert match?({:emit, %{type: :processed, data: "data"}}, result)
-      end))
+      log =
+        strip_color(
+          capture_log(fn ->
+            {result, _state} = debug_handler.(signal, %{})
+            assert match?({:emit, %{type: :processed, data: "data"}}, result)
+          end)
+        )
 
       assert log =~ "[test] Processing signal"
       assert log =~ "Type: :test"
@@ -40,9 +43,12 @@ defmodule AgentForge.DebugTest do
       parent = Signal.new(:parent, "parent")
       child = Signal.correlate(Signal.new(:child, "child"), parent)
 
-      log = strip_color(capture_log(fn ->
-        debug_handler.(child, %{})
-      end))
+      log =
+        strip_color(
+          capture_log(fn ->
+            debug_handler.(child, %{})
+          end)
+        )
 
       assert log =~ ~s(Correlation: "#{child.meta.correlation_id}")
       assert log =~ ~s(Trace: "#{child.meta.trace_id}")
@@ -59,12 +65,17 @@ defmodule AgentForge.DebugTest do
       debug_flow = Debug.trace_flow("test_flow", handlers)
       signal = Signal.new(:start, "data")
 
-      log = strip_color(capture_log(fn ->
-        results = Enum.map(debug_flow, fn handler ->
-          handler.(signal, %{})
-        end)
-        assert length(results) == 2
-      end))
+      log =
+        strip_color(
+          capture_log(fn ->
+            results =
+              Enum.map(debug_flow, fn handler ->
+                handler.(signal, %{})
+              end)
+
+            assert length(results) == 2
+          end)
+        )
 
       assert log =~ "[test_flow[0]]"
       assert log =~ "[test_flow[1]]"
@@ -94,9 +105,12 @@ defmodule AgentForge.DebugTest do
     test "logs signal details" do
       signal = Signal.new(:test, %{key: "value"})
 
-      log = strip_color(capture_log(fn ->
-        Debug.log_signal_processing("context", signal)
-      end))
+      log =
+        strip_color(
+          capture_log(fn ->
+            Debug.log_signal_processing("context", signal)
+          end)
+        )
 
       assert log =~ "[context]"
       assert log =~ "Type: :test"
@@ -108,29 +122,39 @@ defmodule AgentForge.DebugTest do
   describe "result formatting" do
     test "formats emit result" do
       signal = Signal.new(:test, "data")
-      handler = Debug.trace_handler("test", fn _, state ->
-        {Signal.emit(:done, "success"), state}
-      end)
 
-      log = strip_color(capture_log(fn ->
-        handler.(signal, %{})
-      end))
+      handler =
+        Debug.trace_handler("test", fn _, state ->
+          {Signal.emit(:done, "success"), state}
+        end)
+
+      log =
+        strip_color(
+          capture_log(fn ->
+            handler.(signal, %{})
+          end)
+        )
 
       assert log =~ "Emit: :done -> \"success\""
     end
 
     test "formats emit_many result" do
       signal = Signal.new(:test, "data")
-      handler = Debug.trace_handler("test", fn _, state ->
-        {Signal.emit_many([
-          {:step1, "data1"},
-          {:step2, "data2"}
-        ]), state}
-      end)
 
-      log = strip_color(capture_log(fn ->
-        handler.(signal, %{})
-      end))
+      handler =
+        Debug.trace_handler("test", fn _, state ->
+          {Signal.emit_many([
+             {:step1, "data1"},
+             {:step2, "data2"}
+           ]), state}
+        end)
+
+      log =
+        strip_color(
+          capture_log(fn ->
+            handler.(signal, %{})
+          end)
+        )
 
       assert log =~ "Emit Many:"
       assert log =~ ":step1 -> \"data1\""
@@ -139,26 +163,36 @@ defmodule AgentForge.DebugTest do
 
     test "formats halt result" do
       signal = Signal.new(:test, "data")
-      handler = Debug.trace_handler("test", fn _, state ->
-        {Signal.halt("stopped"), state}
-      end)
 
-      log = strip_color(capture_log(fn ->
-        handler.(signal, %{})
-      end))
+      handler =
+        Debug.trace_handler("test", fn _, state ->
+          {Signal.halt("stopped"), state}
+        end)
+
+      log =
+        strip_color(
+          capture_log(fn ->
+            handler.(signal, %{})
+          end)
+        )
 
       assert log =~ "Halt: \"stopped\""
     end
 
     test "formats skip result" do
       signal = Signal.new(:test, "data")
-      handler = Debug.trace_handler("test", fn _, state ->
-        {:skip, state}
-      end)
 
-      log = strip_color(capture_log(fn ->
-        handler.(signal, %{})
-      end))
+      handler =
+        Debug.trace_handler("test", fn _, state ->
+          {:skip, state}
+        end)
+
+      log =
+        strip_color(
+          capture_log(fn ->
+            handler.(signal, %{})
+          end)
+        )
 
       assert log =~ "Skip"
     end

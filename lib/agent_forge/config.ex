@@ -36,9 +36,11 @@ defmodule AgentForge.Config do
           {:ok, handlers} ->
             # Return an executable flow function
             Runtime.configure(handlers)
+
           {:error, reason} ->
             fn _signal -> {:error, reason} end
         end
+
       {:error, reason} ->
         fn _signal -> {:error, reason} end
     end
@@ -71,6 +73,7 @@ defmodule AgentForge.Config do
       String.starts_with?(String.trim(content), "{") ->
         # Looks like JSON
         parse_json(content)
+
       true ->
         # Assume YAML
         parse_yaml(content)
@@ -131,22 +134,31 @@ defmodule AgentForge.Config do
   defp build_transform_step(step) do
     fn_def = step["fn"] || step[:fn]
 
-    transform_fn = case fn_def do
-      "upcase" -> &String.upcase/1
-      "downcase" -> &String.downcase/1
-      "reverse" -> &String.reverse/1
-      custom when is_binary(custom) ->
-        # Safely handle custom function strings
-        fn data ->
-          try do
-            {result, _} = Code.eval_string(custom, [data: data])
-            result
-          rescue
-            e -> raise "Transform evaluation error: #{Exception.message(e)}"
+    transform_fn =
+      case fn_def do
+        "upcase" ->
+          &String.upcase/1
+
+        "downcase" ->
+          &String.downcase/1
+
+        "reverse" ->
+          &String.reverse/1
+
+        custom when is_binary(custom) ->
+          # Safely handle custom function strings
+          fn data ->
+            try do
+              {result, _} = Code.eval_string(custom, data: data)
+              result
+            rescue
+              e -> raise "Transform evaluation error: #{Exception.message(e)}"
+            end
           end
-        end
-      _ -> raise "Invalid transform function: #{inspect(fn_def)}"
-    end
+
+        _ ->
+          raise "Invalid transform function: #{inspect(fn_def)}"
+      end
 
     Primitives.transform(transform_fn)
   end
@@ -174,10 +186,12 @@ defmodule AgentForge.Config do
           data: signal.data,
           signal: signal,
           state: state,
-          String: String  # Allow String module in conditions
+          # Allow String module in conditions
+          String: String
         ]
 
         {result, _} = Code.eval_string(condition_def, bindings)
+
         if is_boolean(result) do
           result
         else
@@ -207,7 +221,8 @@ defmodule AgentForge.Config do
   end
 
   defp build_loop_step(step) do
-    _items_def = step["items"] || step[:items]  # Prefix with _ since it's not used yet
+    # Prefix with _ since it's not used yet
+    _items_def = step["items"] || step[:items]
     action_steps = step["action"] || step[:action] || []
 
     unless is_list(action_steps) do

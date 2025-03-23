@@ -100,7 +100,8 @@ defmodule AgentForge.ConfigTest do
 
       # The loop should have processed each item and the result will be a list of signals
       assert Enum.any?([result.type], fn type -> type in [:loop_item, :item] end)
-      assert result.data in ["A", "B", "C"]  # Should be one of the uppercase items
+      # Should be one of the uppercase items
+      assert result.data in ["A", "B", "C"]
     end
 
     test "handles JSON format" do

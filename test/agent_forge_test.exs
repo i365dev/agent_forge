@@ -34,11 +34,13 @@ defmodule AgentForgeTest do
       end
 
       store_key = :test_counter
-      flow = AgentForge.new_stateful_flow(
-        [counter],
-        store_name: store,
-        store_key: store_key
-      )
+
+      flow =
+        AgentForge.new_stateful_flow(
+          [counter],
+          store_name: store,
+          store_key: store_key
+        )
 
       signal = AgentForge.new_signal(:inc, nil)
 
@@ -64,10 +66,12 @@ defmodule AgentForgeTest do
     end
 
     test "emit_many/1 creates multi-signal results" do
-      {:emit_many, signals} = AgentForge.emit_many([
-        {:test1, "data1"},
-        {:test2, "data2"}
-      ])
+      {:emit_many, signals} =
+        AgentForge.emit_many([
+          {:test1, "data1"},
+          {:test2, "data2"}
+        ])
+
       assert length(signals) == 2
     end
 

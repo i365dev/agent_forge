@@ -50,13 +50,15 @@ defmodule AgentForge.RuntimeTest do
       end
 
       signal = Signal.new(:test, "data")
-      {:ok, result, _state} = Runtime.execute(
-        [handler],
-        signal,
-        debug: true,
-        name: "test_flow",
-        store_name: store
-      )
+
+      {:ok, result, _state} =
+        Runtime.execute(
+          [handler],
+          signal,
+          debug: true,
+          name: "test_flow",
+          store_name: store
+        )
 
       assert result.type == :processed
       assert result.data == "data"
@@ -90,7 +92,8 @@ defmodule AgentForge.RuntimeTest do
       {:ok, result2, _} = flow.(signal)
 
       assert result1.data == 1
-      assert result2.data == 1  # State not preserved between calls
+      # State not preserved between calls
+      assert result2.data == 1
     end
   end
 
@@ -109,7 +112,8 @@ defmodule AgentForge.RuntimeTest do
       {:ok, result2, _} = flow.(signal)
 
       assert result1.data == 1
-      assert result2.data == 2  # State preserved between calls
+      # State preserved between calls
+      assert result2.data == 2
     end
 
     test "generates unique store keys when not provided", %{store: store} do
@@ -136,11 +140,12 @@ defmodule AgentForge.RuntimeTest do
         {Signal.emit(:count, count), Map.put(state, :count, count)}
       end
 
-      flow = Runtime.configure_stateful(
-        [handler],
-        store_name: store,
-        store_prefix: "test"
-      )
+      flow =
+        Runtime.configure_stateful(
+          [handler],
+          store_name: store,
+          store_prefix: "test"
+        )
 
       signal = Signal.new(:inc, nil)
       {:ok, result, _} = flow.(signal)

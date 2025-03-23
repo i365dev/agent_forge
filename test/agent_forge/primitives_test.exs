@@ -6,11 +6,12 @@ defmodule AgentForge.PrimitivesTest do
 
   describe "branch/3" do
     test "executes then_flow when condition is true" do
-      branch = Primitives.branch(
-        fn signal, _ -> signal.data > 10 end,
-        [fn signal, state -> {Signal.emit(:high, signal.data), state} end],
-        [fn signal, state -> {Signal.emit(:low, signal.data), state} end]
-      )
+      branch =
+        Primitives.branch(
+          fn signal, _ -> signal.data > 10 end,
+          [fn signal, state -> {Signal.emit(:high, signal.data), state} end],
+          [fn signal, state -> {Signal.emit(:low, signal.data), state} end]
+        )
 
       signal = Signal.new(:value, 15)
       {{:emit, result}, _state} = branch.(signal, %{})
@@ -20,11 +21,12 @@ defmodule AgentForge.PrimitivesTest do
     end
 
     test "executes else_flow when condition is false" do
-      branch = Primitives.branch(
-        fn signal, _ -> signal.data > 10 end,
-        [fn signal, state -> {Signal.emit(:high, signal.data), state} end],
-        [fn signal, state -> {Signal.emit(:low, signal.data), state} end]
-      )
+      branch =
+        Primitives.branch(
+          fn signal, _ -> signal.data > 10 end,
+          [fn signal, state -> {Signal.emit(:high, signal.data), state} end],
+          [fn signal, state -> {Signal.emit(:low, signal.data), state} end]
+        )
 
       signal = Signal.new(:value, 5)
       {{:emit, result}, _state} = branch.(signal, %{})
@@ -34,11 +36,12 @@ defmodule AgentForge.PrimitivesTest do
     end
 
     test "handles errors in flows" do
-      branch = Primitives.branch(
-        fn _, _ -> true end,
-        [fn _, _ -> raise "Error in then flow" end],
-        [fn signal, state -> {Signal.emit(:low, signal.data), state} end]
-      )
+      branch =
+        Primitives.branch(
+          fn _, _ -> true end,
+          [fn _, _ -> raise "Error in then flow" end],
+          [fn signal, state -> {Signal.emit(:low, signal.data), state} end]
+        )
 
       signal = Signal.new(:value, 15)
       {{:emit, result}, _state} = branch.(signal, %{})
@@ -142,11 +145,12 @@ defmodule AgentForge.PrimitivesTest do
 
   describe "wait/2" do
     test "waits until condition is met" do
-      wait = Primitives.wait(
-        fn _, state -> Map.get(state, :ready, false) end,
-        timeout: 100,
-        retry_interval: 10
-      )
+      wait =
+        Primitives.wait(
+          fn _, state -> Map.get(state, :ready, false) end,
+          timeout: 100,
+          retry_interval: 10
+        )
 
       signal = Signal.new(:check, "waiting")
       state = %{ready: false}
@@ -196,11 +200,12 @@ defmodule AgentForge.PrimitivesTest do
       notify = Primitives.notify([:console], format: format_fn)
       signal = Signal.new(:event, "test message")
 
-      output = ExUnit.CaptureIO.capture_io(fn ->
-        {{:emit, result}, _state} = notify.(signal, %{})
-        assert result.type == :notification
-        assert result.data == "Custom: test message"
-      end)
+      output =
+        ExUnit.CaptureIO.capture_io(fn ->
+          {{:emit, result}, _state} = notify.(signal, %{})
+          assert result.type == :notification
+          assert result.data == "Custom: test message"
+        end)
 
       assert output =~ "Custom: test message"
     end

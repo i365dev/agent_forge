@@ -6,11 +6,11 @@ defmodule AgentForge.Runtime do
   alias AgentForge.{Flow, Signal, Store, Debug}
 
   @type runtime_options :: [
-    debug: boolean(),
-    name: String.t(),
-    store_prefix: String.t(),
-    store_name: atom()
-  ]
+          debug: boolean(),
+          name: String.t(),
+          store_prefix: String.t(),
+          store_name: atom()
+        ]
 
   @doc """
   Executes a flow with the given signal and options.
@@ -36,14 +36,16 @@ defmodule AgentForge.Runtime do
       "Processed: test"
   """
   @spec execute(Flow.flow(), Signal.t(), runtime_options()) ::
-    {:ok, Signal.t() | term(), term()} | {:error, term()}
+          {:ok, Signal.t() | term(), term()} | {:error, term()}
   def execute(flow, signal, opts \\ []) do
     opts = Keyword.merge([debug: false, name: "flow", store_prefix: "flow"], opts)
 
     # Initialize store if needed
     initial_state =
       case {Keyword.get(opts, :store_key), Keyword.get(opts, :store_name, Store)} do
-        {nil, _} -> %{}
+        {nil, _} ->
+          %{}
+
         {store_key, store_name} ->
           case Store.get(store_name, store_key) do
             {:ok, stored_state} -> stored_state
@@ -64,7 +66,9 @@ defmodule AgentForge.Runtime do
       {:ok, result, final_state} ->
         # Update store if needed
         case {Keyword.get(opts, :store_key), Keyword.get(opts, :store_name, Store)} do
-          {nil, _} -> {:ok, result, final_state}
+          {nil, _} ->
+            {:ok, result, final_state}
+
           {store_key, store_name} ->
             Store.put(store_name, store_key, final_state)
             {:ok, result, final_state}
@@ -88,7 +92,8 @@ defmodule AgentForge.Runtime do
       iex> is_function(runtime, 1)
       true
   """
-  @spec configure(Flow.flow(), runtime_options()) :: (Signal.t() -> {:ok, term(), term()} | {:error, term()})
+  @spec configure(Flow.flow(), runtime_options()) :: (Signal.t() ->
+                                                        {:ok, term(), term()} | {:error, term()})
   def configure(flow, opts \\ []) do
     fn signal -> execute(flow, signal, opts) end
   end
@@ -111,12 +116,13 @@ defmodule AgentForge.Runtime do
       true
   """
   @spec configure_stateful(Flow.flow(), runtime_options()) ::
-    (Signal.t() -> {:ok, term(), term()} | {:error, term()})
+          (Signal.t() -> {:ok, term(), term()} | {:error, term()})
   def configure_stateful(flow, opts \\ []) do
     # Generate a unique store name if not provided
-    store_name = Keyword.get_lazy(opts, :store_name, fn ->
-      :"store_#{:crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)}"
-    end)
+    store_name =
+      Keyword.get_lazy(opts, :store_name, fn ->
+        :"store_#{:crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)}"
+      end)
 
     # Generate a unique store key if not provided
     opts =
@@ -135,6 +141,7 @@ defmodule AgentForge.Runtime do
           {:error, {:already_started, _pid}} -> configure(flow, opts)
           error -> error
         end
+
       _pid ->
         configure(flow, opts)
     end

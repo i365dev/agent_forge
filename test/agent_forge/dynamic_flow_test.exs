@@ -6,13 +6,14 @@ defmodule AgentForge.DynamicFlowTest do
 
   describe "select_flow/1" do
     test "selects and executes different flows based on signal type" do
-      selector = DynamicFlow.select_flow(fn signal, _ ->
-        case signal.type do
-          :text -> [fn s, st -> {Signal.emit(:processed_text, String.upcase(s.data)), st} end]
-          :number -> [fn s, st -> {Signal.emit(:processed_number, s.data * 2), st} end]
-          _ -> [fn s, st -> {Signal.emit(:unknown, s.data), st} end]
-        end
-      end)
+      selector =
+        DynamicFlow.select_flow(fn signal, _ ->
+          case signal.type do
+            :text -> [fn s, st -> {Signal.emit(:processed_text, String.upcase(s.data)), st} end]
+            :number -> [fn s, st -> {Signal.emit(:processed_number, s.data * 2), st} end]
+            _ -> [fn s, st -> {Signal.emit(:unknown, s.data), st} end]
+          end
+        end)
 
       text_signal = Signal.new(:text, "hello")
       {{:emit, text_result}, _} = selector.(text_signal, %{})
@@ -130,8 +131,16 @@ defmodule AgentForge.DynamicFlowTest do
 
     test "maintains state across merged flows" do
       flows = [
-        [fn _, st -> {Signal.emit(:count, Map.get(st, :count, 0) + 1), Map.put(st, :count, 1)} end],
-        [fn _, st -> {Signal.emit(:count, Map.get(st, :count, 0) + 1), Map.put(st, :count, 2)} end]
+        [
+          fn _, st ->
+            {Signal.emit(:count, Map.get(st, :count, 0) + 1), Map.put(st, :count, 1)}
+          end
+        ],
+        [
+          fn _, st ->
+            {Signal.emit(:count, Map.get(st, :count, 0) + 1), Map.put(st, :count, 2)}
+          end
+        ]
       ]
 
       merger = DynamicFlow.merge_flows(flows)

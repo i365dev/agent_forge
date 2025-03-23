@@ -9,13 +9,15 @@ defmodule AgentForge.SignalTest do
       signal = Signal.new(:test, "data")
       assert signal.type == :test
       assert signal.data == "data"
+
       assert %{
-        source: nil,
-        timestamp: %DateTime{},
-        trace_id: trace_id,
-        correlation_id: nil,
-        custom: %{}
-      } = signal.meta
+               source: nil,
+               timestamp: %DateTime{},
+               trace_id: trace_id,
+               correlation_id: nil,
+               custom: %{}
+             } = signal.meta
+
       assert is_binary(trace_id)
     end
 
@@ -59,10 +61,12 @@ defmodule AgentForge.SignalTest do
     end
 
     test "emit_many/1 creates an emit_many result" do
-      {:emit_many, signals} = Signal.emit_many([
-        {:test1, "data1"},
-        {:test2, "data2", %{source: "test"}}
-      ])
+      {:emit_many, signals} =
+        Signal.emit_many([
+          {:test1, "data1"},
+          {:test2, "data2", %{source: "test"}}
+        ])
+
       assert length(signals) == 2
       [signal1, signal2] = signals
       assert signal1.type == :test1

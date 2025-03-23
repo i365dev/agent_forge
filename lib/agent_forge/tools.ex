@@ -15,7 +15,8 @@ defmodule AgentForge.Tools do
   @doc """
   Registers a tool function with a given name.
   """
-  def register(name, function, registry \\ __MODULE__) when is_binary(name) and is_function(function, 1) do
+  def register(name, function, registry \\ __MODULE__)
+      when is_binary(name) and is_function(function, 1) do
     GenServer.call(registry, {:register, name, function})
   end
 
@@ -49,17 +50,21 @@ defmodule AgentForge.Tools do
         {:ok, tool_fn} ->
           try do
             result = tool_fn.(signal.data)
-            meta = Map.merge(signal.meta, %{
-              tool: name,
-              parent_trace_id: signal.meta.trace_id,
-              last_tool: name
-            })
+
+            meta =
+              Map.merge(signal.meta, %{
+                tool: name,
+                parent_trace_id: signal.meta.trace_id,
+                last_tool: name
+              })
+
             {{:emit, Signal.new(:tool_result, result, meta)}, state}
           rescue
             e ->
               meta = Map.merge(signal.meta, %{tool: name})
               {{:emit, Signal.new(:error, "Tool error: #{Exception.message(e)}", meta)}, state}
           end
+
         {:error, reason} ->
           meta = Map.merge(signal.meta, %{tool: name})
           {{:emit, Signal.new(:error, reason, meta)}, state}
@@ -72,34 +77,40 @@ defmodule AgentForge.Tools do
   """
   def execute_pipeline(tool_names, registry \\ __MODULE__) when is_list(tool_names) do
     fn signal, state ->
-      results = Enum.reduce_while(tool_names, [], fn name, acc ->
-        case get(name, registry) do
-          {:ok, tool_fn} ->
-            try do
-              result = tool_fn.(signal.data)
-              meta = Map.merge(signal.meta, %{
-                tool: name,
-                last_tool: name,
-                parent_trace_id: signal.meta.trace_id
-              })
-              new_signal = Signal.new(:tool_result, result, meta)
-              {:cont, [new_signal | acc]}
-            rescue
-              e ->
-                meta = Map.merge(signal.meta, %{tool: name})
-                signal = Signal.new(:error, "Tool error: #{Exception.message(e)}", meta)
-                {:halt, {:error, signal}}
-            end
-          {:error, reason} ->
-            meta = Map.merge(signal.meta, %{tool: name})
-            signal = Signal.new(:error, reason, meta)
-            {:halt, {:error, signal}}
-        end
-      end)
+      results =
+        Enum.reduce_while(tool_names, [], fn name, acc ->
+          case get(name, registry) do
+            {:ok, tool_fn} ->
+              try do
+                result = tool_fn.(signal.data)
+
+                meta =
+                  Map.merge(signal.meta, %{
+                    tool: name,
+                    last_tool: name,
+                    parent_trace_id: signal.meta.trace_id
+                  })
+
+                new_signal = Signal.new(:tool_result, result, meta)
+                {:cont, [new_signal | acc]}
+              rescue
+                e ->
+                  meta = Map.merge(signal.meta, %{tool: name})
+                  signal = Signal.new(:error, "Tool error: #{Exception.message(e)}", meta)
+                  {:halt, {:error, signal}}
+              end
+
+            {:error, reason} ->
+              meta = Map.merge(signal.meta, %{tool: name})
+              signal = Signal.new(:error, reason, meta)
+              {:halt, {:error, signal}}
+          end
+        end)
 
       case results do
         {:error, error_signal} ->
           {{:emit, error_signal}, state}
+
         signals when is_list(signals) ->
           {{:emit_many, Enum.reverse(signals)}, state}
       end

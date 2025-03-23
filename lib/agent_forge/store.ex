@@ -92,10 +92,12 @@ defmodule AgentForge.Store do
 
   @impl true
   def handle_cast({:update, key, default, fun}, state) do
-    value = case Map.fetch(state, key) do
-      {:ok, current} -> fun.(current)
-      :error -> fun.(default)
-    end
+    value =
+      case Map.fetch(state, key) do
+        {:ok, current} -> fun.(current)
+        :error -> fun.(default)
+      end
+
     {:noreply, Map.put(state, key, value)}
   end
 

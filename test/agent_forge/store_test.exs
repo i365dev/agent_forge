@@ -62,11 +62,14 @@ defmodule AgentForge.StoreTest do
   describe "concurrent operations" do
     test "handles concurrent updates safely", %{store: store} do
       Store.put(store, :counter, 0)
-      tasks = for _ <- 1..10 do
-        Task.async(fn ->
-          Store.update(store, :counter, 0, &(&1 + 1))
-        end)
-      end
+
+      tasks =
+        for _ <- 1..10 do
+          Task.async(fn ->
+            Store.update(store, :counter, 0, &(&1 + 1))
+          end)
+        end
+
       Task.await_many(tasks)
       {:ok, final_value} = Store.get(store, :counter)
       assert final_value == 10

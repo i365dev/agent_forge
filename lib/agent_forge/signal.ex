@@ -5,22 +5,22 @@ defmodule AgentForge.Signal do
   """
 
   @type t :: %{
-    type: atom(),
-    data: term(),
-    meta: %{
-      source: String.t() | nil,
-      timestamp: DateTime.t() | nil,
-      trace_id: String.t() | nil,
-      correlation_id: String.t() | nil,
-      custom: map()
-    }
-  }
+          type: atom(),
+          data: term(),
+          meta: %{
+            source: String.t() | nil,
+            timestamp: DateTime.t() | nil,
+            trace_id: String.t() | nil,
+            correlation_id: String.t() | nil,
+            custom: map()
+          }
+        }
 
   @type signal_result ::
-    {:emit, t()} |
-    {:emit_many, [t()]} |
-    {:halt, term()} |
-    :skip
+          {:emit, t()}
+          | {:emit_many, [t()]}
+          | {:halt, term()}
+          | :skip
 
   @doc """
   Creates a new signal with the given type and data.
@@ -115,10 +115,11 @@ defmodule AgentForge.Signal do
       true
   """
   def emit_many(signals) when is_list(signals) do
-    {:emit_many, Enum.map(signals, fn
-      {type, data} -> new(type, data)
-      {type, data, meta} -> new(type, data, meta)
-    end)}
+    {:emit_many,
+     Enum.map(signals, fn
+       {type, data} -> new(type, data)
+       {type, data, meta} -> new(type, data, meta)
+     end)}
   end
 
   @doc """

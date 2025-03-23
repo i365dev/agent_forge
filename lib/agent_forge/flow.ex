@@ -61,7 +61,8 @@ defmodule AgentForge.Flow do
   # Private functions
 
   defp process_handlers(handlers, signal, state) do
-    Enum.reduce_while(handlers, {:ok, signal, state}, fn handler, {:ok, current_signal, current_state} ->
+    Enum.reduce_while(handlers, {:ok, signal, state}, fn handler,
+                                                         {:ok, current_signal, current_state} ->
       case process_handler(handler, current_signal, current_state) do
         {{:emit, new_signal}, new_state} ->
           {:cont, {:ok, new_signal, new_state}}
