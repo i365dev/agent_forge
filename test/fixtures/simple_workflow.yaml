@@ -1,0 +1,21 @@
+# Simple workflow example
+flow:
+  # First transform input to uppercase
+  - type: transform
+    fn: upcase
+    
+  # Branch based on length
+  - type: branch
+    condition: "String.length(data) > 5"
+    then:
+      # Handle long text
+      - type: transform
+        fn: "\"LONG: \" <> data"
+      - type: tool
+        name: notify
+    else:
+      # Handle short text
+      - type: transform
+        fn: "\"SHORT: \" <> data"
+      - type: tool
+        name: log

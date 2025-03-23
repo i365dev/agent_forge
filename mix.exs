@@ -29,7 +29,9 @@ defmodule AgentForge.MixProject do
   defp deps do
     [
       {:jason, "~> 1.4"},
-      {:excoveralls, "~> 0.18", only: :test}
+      {:excoveralls, "~> 0.18", only: :test},
+      {:yaml_elixir, "~> 2.9"},  # YAML support
+      {:meck, "~> 0.9", only: :test}  # For mocking in tests
     ]
   end
 end

@@ -1,71 +1,41 @@
 defmodule AgentForge.Flow do
   @moduledoc """
-  Handles the composition and execution of signal handlers in a processing pipeline.
-  Flows are sequences of handlers that process signals and maintain state.
+  Provides functions for processing signals through a chain of handlers.
+  Each handler is a function that takes a signal and state, and returns a tuple with result and new state.
   """
 
   alias AgentForge.Signal
 
-  @type handler :: (Signal.t(), term() -> {Signal.signal_result(), term()})
-  @type handler_with_opts :: {handler(), keyword()}
-  @type flow :: [handler() | handler_with_opts()]
-
   @doc """
-  Processes a signal through a flow of handlers.
-  Returns the final result and state after processing through all handlers.
-
-  ## Examples
-
-      iex> handler = fn signal, state ->
-      ...>   {{:emit, AgentForge.Signal.new(:processed, signal.data)}, state}
-      ...> end
-      iex> signal = AgentForge.Signal.new(:test, "data")
-      iex> {:ok, result, _state} = AgentForge.Flow.process([handler], signal, %{})
-      iex> result.type == :processed
-      true
+  Processes a signal through a list of handlers.
+  Each handler should return a tuple {{:emit, signal} | {:error, reason}, new_state}.
   """
-  @spec process(flow(), Signal.t(), term()) :: {:ok, Signal.t() | term(), term()} | {:error, term()}
-  def process(handlers, signal, initial_state) when is_list(handlers) do
+  def process(handlers, signal, state) when is_list(handlers) do
     try do
-      process_handlers(handlers, signal, initial_state)
-    rescue
-      e ->
-        {:error, "Flow processing error: #{inspect(e)}"}
+      process_handlers(handlers, signal, state)
+      |> handle_result()
+    catch
+      _kind, error ->
+        {:error, "Flow processing error: #{inspect(error)}"}
     end
   end
 
   @doc """
-  Creates a new handler that always emits a specific signal type.
-
-  ## Examples
-
-      iex> handler = AgentForge.Flow.always_emit(:done, "completed")
-      iex> {result, _state} = handler.(nil, %{})
-      iex> match?({:emit, %{type: :done, data: "completed"}}, result)
-      true
+  Creates a handler that always emits the same signal type and data.
   """
-  def always_emit(type, data, meta \\ %{}) do
-    fn _signal, state -> {Signal.emit(type, data, meta), state} end
+  def always_emit(type, data) do
+    fn _signal, state ->
+      {{:emit, Signal.new(type, data)}, state}
+    end
   end
 
   @doc """
-  Creates a new handler that filters signals based on type.
-  Only processes signals of the specified type, skips others.
-
-  ## Examples
-
-      iex> handler = AgentForge.Flow.filter_type(:test, fn signal, state ->
-      ...>   {AgentForge.Signal.emit(:processed, signal.data), state}
-      ...> end)
-      iex> signal = AgentForge.Signal.new(:test, "data")
-      iex> {result, _state} = handler.(signal, %{})
-      iex> match?({:emit, %{type: :processed}}, result)
-      true
+  Creates a handler that filters signals by type.
   """
-  def filter_type(type, handler) when is_atom(type) and is_function(handler, 2) do
+  def filter_type(expected_type, inner_handler) do
     fn signal, state ->
-      if signal.type == type do
-        handler.(signal, state)
+      if signal.type == expected_type do
+        inner_handler.(signal, state)
       else
         {:skip, state}
       end
@@ -73,52 +43,55 @@ defmodule AgentForge.Flow do
   end
 
   @doc """
-  Creates a new handler that updates state with signal data.
-
-  ## Examples
-
-      iex> handler = AgentForge.Flow.store_in_state(:last_message)
-      iex> signal = AgentForge.Signal.new(:message, "Hello")
-      iex> {_result, state} = handler.(signal, %{})
-      iex> state.last_message == "Hello"
-      true
+  Creates a handler that stores signal data in state under a key.
   """
-  def store_in_state(key) when is_atom(key) do
+  def store_in_state(key) do
     fn signal, state ->
       {:skip, Map.put(state, key, signal.data)}
     end
   end
 
-  # Private Functions
+  @doc """
+  Processes a single handler function with a signal and state.
+  """
+  def process_handler(handler, signal, state) when is_function(handler, 2) do
+    handler.(signal, state)
+  end
 
-  defp process_handlers(handlers, signal, initial_state) do
-    Enum.reduce_while(handlers, {signal, initial_state}, fn
-      handler, {current_signal, current_state} when is_function(handler, 2) ->
-        handle_result(handler.(current_signal, current_state))
+  # Private functions
 
-      {handler, _opts}, {current_signal, current_state} when is_function(handler, 2) ->
-        handle_result(handler.(current_signal, current_state))
+  defp process_handlers(handlers, signal, state) do
+    Enum.reduce_while(handlers, {:ok, signal, state}, fn handler, {:ok, current_signal, current_state} ->
+      case process_handler(handler, current_signal, current_state) do
+        {{:emit, new_signal}, new_state} ->
+          {:cont, {:ok, new_signal, new_state}}
+
+        {{:emit_many, signals}, new_state} when is_list(signals) ->
+          # When multiple signals are emitted, use the last one for continuation
+          {:cont, {:ok, List.last(signals), new_state}}
+
+        {:skip, new_state} ->
+          {:halt, {:ok, nil, new_state}}
+
+        {:halt, data} ->
+          {:halt, {:ok, data, state}}
+
+        {{:halt, data}, _state} ->
+          {:halt, {:ok, data, state}}
+
+        {{:error, reason}, new_state} ->
+          {:halt, {:error, reason, new_state}}
+
+        {other, _} ->
+          raise "Invalid handler result: #{inspect(other)}"
+
+        other ->
+          raise "Invalid handler result: #{inspect(other)}"
+      end
     end)
-    |> case do
-      {:halt, result, final_state} -> {:ok, result, final_state}
-      {signal, final_state} -> {:ok, signal, final_state}
-    end
   end
 
-  defp handle_result({{:emit, signal}, new_state}) do
-    {:cont, {signal, new_state}}
-  end
-
-  defp handle_result({{:emit_many, [signal | _] = _signals}, new_state}) do
-    # For now, we just take the first signal. In the future, we could process all signals
-    {:cont, {signal, new_state}}
-  end
-
-  defp handle_result({{:halt, result}, new_state}) do
-    {:halt, {:halt, result, new_state}}
-  end
-
-  defp handle_result({:skip, new_state}) do
-    {:halt, {:halt, nil, new_state}}
-  end
+  # Handle the final result
+  defp handle_result({:ok, signal, state}), do: {:ok, signal, state}
+  defp handle_result({:error, reason, _state}), do: {:error, reason}
 end
