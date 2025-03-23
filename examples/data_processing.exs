@@ -5,10 +5,10 @@
 #
 # To run: elixir examples/data_processing.exs
 
-Code.require_file("../lib/agent_forge.ex")
-Code.require_file("../lib/agent_forge/signal.ex")
-Code.require_file("../lib/agent_forge/flow.ex")
-Code.require_file("../lib/agent_forge/primitives.ex")
+Code.require_file("lib/agent_forge.ex")
+Code.require_file("lib/agent_forge/signal.ex")
+Code.require_file("lib/agent_forge/flow.ex")
+Code.require_file("lib/agent_forge/primitives.ex")
 
 defmodule DataProcessing do
   alias AgentForge.{Flow, Signal, Primitives}

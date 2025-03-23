@@ -5,83 +5,100 @@
 #
 # To run: elixir examples/config_workflow.exs
 
-Code.require_file("../lib/agent_forge.ex")
-Code.require_file("../lib/agent_forge/signal.ex")
-Code.require_file("../lib/agent_forge/flow.ex")
-Code.require_file("../lib/agent_forge/primitives.ex")
-Code.require_file("../lib/agent_forge/config.ex")
+Code.require_file("lib/agent_forge.ex")
+Code.require_file("lib/agent_forge/signal.ex")
+Code.require_file("lib/agent_forge/flow.ex")
+Code.require_file("lib/agent_forge/primitives.ex")
+Code.require_file("lib/agent_forge/config.ex")
 
 defmodule ConfigWorkflow do
   alias AgentForge.{Flow, Signal, Primitives}
 
   def validate_field(data, field, rules) do
-    value = Map.get(data, field)
+    value = Map.get(data, String.to_atom(field))
     cond do
-      rules.required && is_nil(value) ->
+      rules["required"] && is_nil(value) ->
         {:error, "#{field} is required"}
-      rules.type == "number" && not is_number(value) ->
+      rules["type"] == "number" && not is_number(value) ->
         {:error, "#{field} must be a number"}
-      rules.min && value < rules.min ->
-        {:error, "#{field} must be at least #{rules.min}"}
+      rules["min"] && value < rules["min"] ->
+        {:error, "#{field} must be at least #{rules["min"]}"}
       true ->
         {:ok, value}
     end
   end
 
   def create_validation_transform(config) do
-    Primitives.transform(fn data ->
-      Enum.reduce_while(config.validate, data, fn rule, acc ->
-        case validate_field(acc, rule.field, rule) do
-          {:ok, _} -> {:cont, acc}
-          {:error, reason} -> {:halt, raise(reason)}
+    fn signal, state ->
+      result = Enum.reduce_while(config["validate"], {:ok, signal.data}, fn rule, {:ok, acc} ->
+        case validate_field(acc, rule["field"], rule) do
+          {:ok, _} -> {:cont, {:ok, acc}}
+          {:error, reason} -> {:halt, {:error, reason}}
         end
       end)
-    end)
+
+      case result do
+        {:ok, data} -> {Signal.emit(:validated, data), state}
+        {:error, reason} -> {Signal.emit(:validation_error, reason), state}
+      end
+    end
   end
 
   def create_enrichment_transform(config) do
-    Primitives.transform(fn data ->
-      Enum.reduce(config.add_fields, data, fn
-        %{timestamp: "now()"}, acc ->
-          Map.put(acc, :timestamp, DateTime.utc_now())
-        field, acc ->
-          Map.merge(acc, field)
-      end)
-    end)
+    fn signal, state ->
+      try do
+        enriched_data = Enum.reduce(config["add_fields"], signal.data, fn
+          %{"timestamp" => "now()"}, acc ->
+            Map.put(acc, :timestamp, DateTime.utc_now())
+          field, acc ->
+            Map.merge(acc, field)
+        end)
+        {Signal.emit(:enriched, enriched_data), state}
+      rescue
+        e in RuntimeError -> {Signal.emit(:error, e.message), state}
+      end
+    end
   end
 
   def create_branch(config, flows) do
-    condition = case config.condition do
+    condition = case config["condition"] do
       "age >= 18" ->
-        fn signal, _ -> signal.data.age >= 18 end
+        fn signal, _ -> Map.get(signal.data, :age) >= 18 end
     end
 
-    then_flow = Map.get(flows, config.then_flow)
-    else_flow = Map.get(flows, config.else_flow)
+    then_flow = flows[config["then_flow"]]
+    |> Enum.map(fn step -> create_handler(step, flows) end)
+
+    else_flow = flows[config["else_flow"]]
+    |> Enum.map(fn step -> create_handler(step, flows) end)
 
     Primitives.branch(condition, then_flow, else_flow)
   end
 
   def create_notification(config) do
-    format_fn = fn data ->
-      config.message
-      |> String.replace("{name}", data.name)
-      |> String.replace("{age}", to_string(data.age))
-    end
+    fn signal, state ->
+      try do
+        message = config["message"]
+        |> String.replace("{name}", to_string(Map.get(signal.data, :name)))
+        |> String.replace("{age}", to_string(Map.get(signal.data, :age)))
 
-    Primitives.notify(config.channels, format: format_fn)
+        {Signal.emit(:notification, message), state}
+      rescue
+        e in RuntimeError -> {Signal.emit(:error, e.message), state}
+      end
+    end
   end
 
   def create_handler(step, flows) do
-    case step.type do
-      "transform" when step.name == "validate_input" ->
-        create_validation_transform(step.config)
-      "transform" when step.name == "enrich_data" ->
-        create_enrichment_transform(step.config)
-      "branch" ->
-        create_branch(step.config, flows)
-      "notify" ->
-        create_notification(step.config)
+    case {step["type"], step["name"]} do
+      {"transform", "validate_input"} ->
+        create_validation_transform(step["config"])
+      {"transform", "enrich_data"} ->
+        create_enrichment_transform(step["config"])
+      {"branch", _} ->
+        create_branch(step["config"], flows)
+      {"notify", _} ->
+        create_notification(step["config"])
     end
   end
 
@@ -146,6 +163,10 @@ defmodule ConfigWorkflow do
     }
   end
 
+  def format_error({:validation_error, message}), do: "Validation error: #{message}"
+  def format_error({:error, message}) when is_binary(message), do: message
+  def format_error(reason), do: "Error: #{inspect(reason)}"
+
   def run do
     # Load workflow configuration
     workflow = load_workflow("examples/workflows/sample.yaml")
@@ -172,7 +193,7 @@ defmodule ConfigWorkflow do
         {:ok, result, _} ->
           IO.puts("Success: #{inspect(result)}")
         {:error, reason} ->
-          IO.puts("Error: #{reason}")
+          IO.puts("Error: #{format_error(reason)}")
       end
     end)
   end
