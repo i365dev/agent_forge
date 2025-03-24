@@ -51,6 +51,10 @@ jobs:
 
       - name: Run Tests
         run: mix test
+        env:
+          MIX_ENV: test
+          # Ensure example tests are included
+          INCLUDE_EXAMPLES: true
 
       - name: Code Coverage
         run: mix coveralls.github
