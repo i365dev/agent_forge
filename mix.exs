@@ -11,6 +11,7 @@ defmodule AgentForge.MixProject do
       elixir: "~> 1.18.3",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      elixirc_paths: ["lib/agent_forge/signal.ex", "lib/agent_forge/store.ex", "lib/agent_forge/flow.ex", "lib/agent_forge/runtime.ex", "lib/agent_forge/primitives.ex", "lib"],
       # Test coverage configuration
       test_coverage: [tool: ExCoveralls],
       preferred_cli_env: [

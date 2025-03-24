@@ -5,11 +5,6 @@
 #
 # To run: elixir examples/data_processing.exs
 
-Code.require_file("lib/agent_forge.ex")
-Code.require_file("lib/agent_forge/signal.ex")
-Code.require_file("lib/agent_forge/flow.ex")
-Code.require_file("lib/agent_forge/primitives.ex")
-
 defmodule DataProcessing do
   alias AgentForge.{Flow, Signal, Primitives}
 
@@ -71,10 +66,20 @@ defmodule DataProcessing do
       # Route and process based on order size
       case Flow.process([route_order], validated_signal, state1) do
         {:ok, %{type: :large_order} = signal, state2} ->
-          Flow.process(large_order_flow, signal, state2)
+          case Flow.process(large_order_flow, signal, state2) do
+            {:ok, result, _final_state} ->
+              IO.puts("Large order processed: #{inspect(result)}")
+            {:error, reason} ->
+              IO.puts("Error processing large order: #{reason}")
+          end
 
         {:ok, %{type: :standard_order} = signal, state2} ->
-          Flow.process(standard_order_flow, signal, state2)
+          case Flow.process(standard_order_flow, signal, state2) do
+            {:ok, result, _final_state} ->
+              IO.puts("Standard order processed: #{inspect(result)}")
+            {:error, reason} ->
+              IO.puts("Error processing standard order: #{reason}")
+          end
       end
     end)
   end

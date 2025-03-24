@@ -5,11 +5,6 @@
 #
 # To run: elixir examples/async_workflow.exs
 
-Code.require_file("lib/agent_forge.ex")
-Code.require_file("lib/agent_forge/signal.ex")
-Code.require_file("lib/agent_forge/flow.ex")
-Code.require_file("lib/agent_forge/primitives.ex")
-
 defmodule AsyncWorkflow do
   alias AgentForge.{Flow, Signal}
 
@@ -23,13 +18,13 @@ defmodule AsyncWorkflow do
 
   def run do
     # Start async job
-    start_job = fn signal, state ->
+    start_job = fn _signal, state ->
       simulate_async_job(self())
-      {Signal.emit(:job_started, signal.data), state}
+      {Signal.emit(:job_started, "Starting async job"), state}
     end
 
     # Wait and process job completion
-    wait_process = fn signal, state ->
+    wait_process = fn _signal, state ->
       receive do
         {:job_complete, result} ->
           message = "Job completed with result: #{inspect(result.result)}"

@@ -5,12 +5,6 @@
 #
 # To run: elixir examples/config_workflow.exs
 
-Code.require_file("lib/agent_forge.ex")
-Code.require_file("lib/agent_forge/signal.ex")
-Code.require_file("lib/agent_forge/flow.ex")
-Code.require_file("lib/agent_forge/primitives.ex")
-Code.require_file("lib/agent_forge/config.ex")
-
 defmodule ConfigWorkflow do
   alias AgentForge.{Flow, Signal, Primitives}
 
@@ -107,65 +101,70 @@ defmodule ConfigWorkflow do
   end
 
   @doc """
-  Load workflow configuration
+  Load workflow configuration from a YAML file or return stub data for testing.
   """
-  def load_workflow(_path) do
-    %{
-      "steps" => [
-        %{
-          "name" => "validate_input",
-          "type" => "transform",
-          "config" => %{
-            "validate" => [
-              %{"field" => "name", "required" => true},
-              %{"field" => "age", "type" => "number", "min" => 0}
-            ]
-          }
-        },
-        %{
-          "name" => "enrich_data",
-          "type" => "transform",
-          "config" => %{
-            "add_fields" => [
-              %{"timestamp" => "now()"},
-              %{"processed" => true}
-            ]
-          }
-        },
-        %{
-          "name" => "check_age",
-          "type" => "branch",
-          "config" => %{
-            "condition" => "age >= 18",
-            "then_flow" => "adult_flow",
-            "else_flow" => "minor_flow"
-          }
-        }
-      ],
-      "flows" => %{
-        "adult_flow" => [
+  def load_workflow(path) do
+    if File.exists?(path) do
+      YamlElixir.read_from_file!(path)
+    else
+      # Return stub data for testing when file doesn't exist
+      %{
+        "steps" => [
           %{
-            "name" => "process_adult",
-            "type" => "notify",
+            "name" => "validate_input",
+            "type" => "transform",
             "config" => %{
-              "channels" => ["console"],
-              "message" => "Processing adult user: {name}"
+              "validate" => [
+                %{"field" => "name", "required" => true},
+                %{"field" => "age", "type" => "number", "min" => 0}
+              ]
+            }
+          },
+          %{
+            "name" => "enrich_data",
+            "type" => "transform",
+            "config" => %{
+              "add_fields" => [
+                %{"timestamp" => "now()"},
+                %{"processed" => true}
+              ]
+            }
+          },
+          %{
+            "name" => "check_age",
+            "type" => "branch",
+            "config" => %{
+              "condition" => "age >= 18",
+              "then_flow" => "adult_flow",
+              "else_flow" => "minor_flow"
             }
           }
         ],
-        "minor_flow" => [
-          %{
-            "name" => "process_minor",
-            "type" => "notify",
-            "config" => %{
-              "channels" => ["console"],
-              "message" => "Cannot process minor: {name}",
-              "notify_guardian" => true
+        "flows" => %{
+          "adult_flow" => [
+            %{
+              "name" => "process_adult",
+              "type" => "notify",
+              "config" => %{
+                "channels" => ["console"],
+                "message" => "Processing adult user: {name}"
+              }
             }
-          }
-        ]
+          ],
+          "minor_flow" => [
+            %{
+              "name" => "process_minor",
+              "type" => "notify",
+              "config" => %{
+                "channels" => ["console"],
+                "message" => "Cannot process minor: {name}",
+                "notify_guardian" => true
+              }
+            }
+          ]
+        }
       }
-    }
+    end
   end
 
   def format_error({:validation_error, message}), do: "Validation error: #{message}"
@@ -175,7 +174,10 @@ defmodule ConfigWorkflow do
 
   def run do
     # Load workflow configuration from YAML
-    workflow = load_workflow("examples/workflows/sample.yaml")
+    yaml_path = "examples/workflows/sample.yaml"
+    workflow = load_workflow(yaml_path)
+
+    IO.puts("\nUsing #{if File.exists?(yaml_path), do: "YAML configuration", else: "stub data"}")
 
     # Create handlers from configuration
     handlers = Enum.map(workflow["steps"], & create_handler(&1, workflow["flows"]))
@@ -208,8 +210,6 @@ defmodule ConfigWorkflow do
     case Flow.process(handlers, signal, state) do
       {:ok, result, _} ->
         {:ok, result}
-      {:halt, msg, _} ->
-        {:error, msg}
       {:error, {:badmap, msg}} ->
         clean_msg = msg
         |> String.replace(~r/Transform error: expected a map got: "/, "")
