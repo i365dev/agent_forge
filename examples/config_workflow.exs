@@ -11,9 +11,6 @@ Code.require_file("lib/agent_forge/flow.ex")
 Code.require_file("lib/agent_forge/primitives.ex")
 Code.require_file("lib/agent_forge/config.ex")
 
-# Add the YamlElixir application
-Application.ensure_all_started(:yaml_elixir)
-
 defmodule ConfigWorkflow do
   alias AgentForge.{Flow, Signal, Primitives}
 
@@ -35,14 +32,18 @@ defmodule ConfigWorkflow do
     fn signal, state ->
       result = Enum.reduce_while(config["validate"], {:ok, signal.data}, fn rule, {:ok, acc} ->
         case validate_field(acc, rule["field"], rule) do
-          {:ok, _} -> {:cont, {:ok, acc}}
-          {:error, reason} -> {:halt, {:error, reason}}
+          {:ok, _} ->
+            {:cont, {:ok, acc}}
+          {:error, reason} ->
+            {:halt, {:error, reason}}
         end
       end)
 
       case result do
-        {:ok, data} -> {Signal.emit(:validated, data), state}
-        {:error, reason} -> {Signal.emit(:validation_error, reason), state}
+        {:ok, data} ->
+          {Signal.emit(:validated, data), state}
+        {:error, reason} ->
+          {Signal.halt(reason), state}
       end
     end
   end
@@ -105,26 +106,10 @@ defmodule ConfigWorkflow do
     end
   end
 
-  def load_workflow(path) do
-    if File.exists?(path) do
-      case YamlElixir.read_from_file(path) do
-        {:ok, workflow} -> workflow
-        {:error, reason} ->
-          IO.puts("Error reading YAML file: #{inspect(reason)}")
-          IO.puts("Using default workflow configuration.")
-          # Use the hard-coded workflow directly
-          default_workflow()
-      end
-    else
-      IO.puts("Warning: YAML file not found at #{path}")
-      IO.puts("Using default workflow configuration.")
-      # Use the hard-coded workflow directly
-      default_workflow()
-    end
-  end
-
-  # Hard-coded sample workflow for demonstration
-  defp default_workflow do
+  @doc """
+  Load workflow configuration
+  """
+  def load_workflow(_path) do
     %{
       "steps" => [
         %{
@@ -185,10 +170,11 @@ defmodule ConfigWorkflow do
 
   def format_error({:validation_error, message}), do: "Validation error: #{message}"
   def format_error({:error, message}) when is_binary(message), do: message
+  def format_error({:badmap, message}) when is_binary(message), do: message
   def format_error(reason), do: "Error: #{inspect(reason)}"
 
   def run do
-    # Load workflow configuration
+    # Load workflow configuration from YAML
     workflow = load_workflow("examples/workflows/sample.yaml")
 
     # Create handlers from configuration
@@ -209,13 +195,29 @@ defmodule ConfigWorkflow do
       signal = Signal.new(:user_data, data)
       state = %{}
 
-      case Flow.process(handlers, signal, state) do
-        {:ok, result, _} ->
+      case process_with_error_handling(handlers, signal, state) do
+        {:ok, result} ->
           IO.puts("Success: #{inspect(result)}")
         {:error, reason} ->
-          IO.puts("Error: #{format_error(reason)}")
+          IO.puts("Error: #{reason}")
       end
     end)
+  end
+
+  defp process_with_error_handling(handlers, signal, state) do
+    case Flow.process(handlers, signal, state) do
+      {:ok, result, _} ->
+        {:ok, result}
+      {:halt, msg, _} ->
+        {:error, msg}
+      {:error, {:badmap, msg}} ->
+        clean_msg = msg
+        |> String.replace(~r/Transform error: expected a map got: "/, "")
+        |> String.replace(~r/"$/, "")
+        {:error, clean_msg}
+      {:error, reason} ->
+        {:error, format_error(reason)}
+    end
   end
 end
 
