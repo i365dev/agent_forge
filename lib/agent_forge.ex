@@ -70,6 +70,66 @@ defmodule AgentForge do
     Runtime.configure_stateful(handlers, opts)
   end
 
+  @doc """
+  Processes a flow with execution limits.
+  This can prevent long-running operations.
+
+  ## Options
+
+  * `:timeout_ms` - Maximum execution time in milliseconds (default: 30000)
+  * `:collect_stats` - Whether to collect execution statistics (default: true)
+  * `:return_stats` - Whether to return statistics in the result (default: false)
+
+  ## Examples
+
+      iex> handlers = [
+      ...>   fn _signal, state -> {{:emit, AgentForge.Signal.new(:done, "Success")}, state} end
+      ...> ]
+      iex> {:ok, result, _} = AgentForge.process_with_limits(handlers, AgentForge.Signal.new(:test, "data"), %{})
+      iex> result.data
+      "Success"
+  """
+  @spec process_with_limits(
+          # handler functions
+          list(function()),
+          # input signal
+          Signal.t(),
+          # initial state
+          map(),
+          # options
+          keyword()
+        ) ::
+          {:ok, Signal.t() | term(), term()}
+          | {:ok, Signal.t() | term(), term(), AgentForge.ExecutionStats.t()}
+          | {:error, term(), term()}
+          | {:error, term(), term(), AgentForge.ExecutionStats.t()}
+  def process_with_limits(handlers, signal, initial_state, opts \\ []) do
+    # Use Runtime.execute_with_limits instead of directly calling Flow.process_with_limits
+    # This ensures proper state persistence between executions
+    Runtime.execute_with_limits(
+      handlers,
+      signal,
+      opts |> Keyword.put(:initial_state, initial_state)
+    )
+  end
+
+  @doc """
+  Gets statistics from the last flow execution.
+  Returns nil if no flow has been executed yet or statistics collection was disabled.
+
+  ## Examples
+
+      iex> handlers = [fn signal, state -> {{:emit, signal}, state} end]
+      iex> signal = AgentForge.Signal.new(:test, "data")
+      iex> {:ok, _, _} = AgentForge.process_with_limits(handlers, signal, %{})
+      iex> stats = AgentForge.get_last_execution_stats()
+      iex> stats.steps
+      1
+  """
+  def get_last_execution_stats do
+    Runtime.get_last_execution_stats()
+  end
+
   # Re-export commonly used functions from Signal module
   defdelegate new_signal(type, data, meta \\ %{}), to: Signal, as: :new
   defdelegate emit(type, data, meta \\ %{}), to: Signal

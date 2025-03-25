@@ -3,37 +3,32 @@ defmodule AgentForge.Runtime do
   Provides the runtime environment for executing flows in the AgentForge system.
   """
 
-  alias AgentForge.{Flow, Signal, Store, Debug}
+  alias AgentForge.{Flow, Signal, Store, Debug, ExecutionStats}
 
   @type runtime_options :: [
           debug: boolean(),
           name: String.t(),
           store_prefix: String.t(),
-          store_name: atom()
+          store_name: atom(),
+          max_steps: non_neg_integer() | :infinity,
+          timeout: non_neg_integer() | :infinity,
+          collect_stats: boolean(),
+          return_stats: boolean()
         ]
 
+  @spec execute(maybe_improper_list(), %{
+          data: any(),
+          meta: %{
+            correlation_id: nil | binary(),
+            custom: map(),
+            source: nil | binary(),
+            timestamp: nil | DateTime.t(),
+            trace_id: nil | binary()
+          },
+          type: atom()
+        }) :: {:error, any()} | {:ok, any(), any()}
   @doc """
   Executes a flow with the given signal and options.
-  Returns the result of processing the flow.
-
-  ## Options
-
-  * `:debug` - Enables debug logging (default: false)
-  * `:name` - Name for the flow execution (default: "flow")
-  * `:store_prefix` - Prefix for store keys (default: "flow")
-  * `:store_name` - Name of the store to use (optional)
-
-  ## Examples
-
-      iex> handler = fn signal, state ->
-      ...>   {AgentForge.Signal.emit(:done, "Processed: " <> signal.data), state}
-      ...> end
-      iex> {:ok, result, _state} = AgentForge.Runtime.execute([handler],
-      ...>   AgentForge.Signal.new(:start, "test"),
-      ...>   debug: true
-      ...> )
-      iex> result.data
-      "Processed: test"
   """
   @spec execute(Flow.flow(), Signal.t(), runtime_options()) ::
           {:ok, Signal.t() | term(), term()} | {:error, term()}
@@ -41,16 +36,19 @@ defmodule AgentForge.Runtime do
     opts = Keyword.merge([debug: false, name: "flow", store_prefix: "flow"], opts)
 
     # Initialize store if needed
-    initial_state =
+    {initial_state, store_opts} =
       case {Keyword.get(opts, :store_key), Keyword.get(opts, :store_name, Store)} do
         {nil, _} ->
-          %{}
+          {%{}, nil}
 
         {store_key, store_name} ->
-          case Store.get(store_name, store_key) do
-            {:ok, stored_state} -> stored_state
-            _ -> %{}
-          end
+          stored_state =
+            case Store.get(store_name, store_key) do
+              {:ok, state} -> state
+              _ -> %{}
+            end
+
+          {stored_state, {store_name, store_key}}
       end
 
     # Wrap with debug if enabled
@@ -65,32 +63,23 @@ defmodule AgentForge.Runtime do
     case Flow.process(flow, signal, initial_state) do
       {:ok, result, final_state} ->
         # Update store if needed
-        case {Keyword.get(opts, :store_key), Keyword.get(opts, :store_name, Store)} do
-          {nil, _} ->
-            {:ok, result, final_state}
+        maybe_update_store(store_opts, final_state)
+        {:ok, result, final_state}
 
-          {store_key, store_name} ->
-            Store.put(store_name, store_key, final_state)
-            {:ok, result, final_state}
-        end
-
-      error ->
-        error
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
   @doc """
+  Gets statistics from the last flow execution.
+  """
+  def get_last_execution_stats do
+    Flow.get_last_execution_stats()
+  end
+
+  @doc """
   Creates a new runtime configuration for a flow.
-  This allows storing configuration that can be reused for multiple executions.
-
-  ## Examples
-
-      iex> handler = fn signal, state ->
-      ...>   {AgentForge.Signal.emit(:done, signal.data), state}
-      ...> end
-      iex> runtime = AgentForge.Runtime.configure([handler], debug: true, name: "test_flow")
-      iex> is_function(runtime, 1)
-      true
   """
   @spec configure(Flow.flow(), runtime_options()) :: (Signal.t() ->
                                                         {:ok, term(), term()} | {:error, term()})
@@ -100,20 +89,6 @@ defmodule AgentForge.Runtime do
 
   @doc """
   Creates a new runtime configuration that maintains state between executions.
-  Similar to configure/2 but automatically stores and retrieves state.
-
-  ## Examples
-
-      iex> increment = fn _signal, state ->
-      ...>   count = Map.get(state, :count, 0) + 1
-      ...>   {AgentForge.Signal.emit(:count, count), Map.put(state, :count, count)}
-      ...> end
-      iex> runtime = AgentForge.Runtime.configure_stateful([increment],
-      ...>   store_key: :counter,
-      ...>   debug: true
-      ...> )
-      iex> is_function(runtime, 1)
-      true
   """
   @spec configure_stateful(Flow.flow(), runtime_options()) ::
           (Signal.t() -> {:ok, term(), term()} | {:error, term()})
@@ -124,6 +99,9 @@ defmodule AgentForge.Runtime do
         :"store_#{:crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)}"
       end)
 
+    # Start the store if needed
+    _ = ensure_store_started(store_name)
+
     # Generate a unique store key if not provided
     opts =
       opts
@@ -133,17 +111,145 @@ defmodule AgentForge.Runtime do
         :"#{prefix}_#{:crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)}"
       end)
 
-    # Don't try to start the store if it's already started
-    case Process.whereis(store_name) do
-      nil ->
-        case Store.start_link(name: store_name) do
-          {:ok, _pid} -> configure(flow, opts)
-          {:error, {:already_started, _pid}} -> configure(flow, opts)
-          error -> error
-        end
+    configure(flow, opts)
+  end
 
-      _pid ->
-        configure(flow, opts)
+  @doc """
+  Executes a flow with execution limits.
+
+  Enforces limits on execution (maximum steps and timeout) to prevent
+  infinite loops and long-running processes. Integrates with Store for
+  state persistence between executions.
+
+  ## Options
+    * `:timeout_ms` - Maximum execution time in milliseconds (default: 30000)
+    * `:collect_stats` - Whether to collect execution statistics (default: true)
+    * `:return_stats` - Whether to include stats in the return value (default: false)
+    * `:debug` - Whether to enable debugging (default: false)
+    * `:name` - Name for debugging output (default: "flow")
+    * `:store_prefix` - Prefix for store keys (default: "flow")
+    * `:store_name` - Name of the store to use
+    * `:store_key` - Key within the store to access state
+    * `:initial_state` - Initial state to use for execution
+  """
+  @spec execute_with_limits(Flow.flow(), Signal.t(), runtime_options()) ::
+          {:ok, Signal.t() | term(), term()}
+          | {:ok, Signal.t() | term(), term(), ExecutionStats.t()}
+          | {:error, term(), term()}
+          | {:error, term(), term(), ExecutionStats.t()}
+  def execute_with_limits(flow, signal, opts \\ []) do
+    # Merge default options
+    opts =
+      Keyword.merge(
+        [
+          debug: false,
+          name: "flow",
+          store_prefix: "flow",
+          timeout_ms: 30000,
+          collect_stats: true,
+          return_stats: false
+        ],
+        opts
+      )
+
+    # Initialize store if needed
+    {initial_state, store_opts} =
+      case {Keyword.get(opts, :initial_state), Keyword.get(opts, :store_name),
+            Keyword.get(opts, :store_key)} do
+        # Use provided initial_state when explicitly passed
+        {provided_state, _, _} when not is_nil(provided_state) ->
+          # Extract store options if available for persistence
+          store_opts =
+            case {Keyword.get(opts, :store_name), Keyword.get(opts, :store_key)} do
+              {nil, _} -> nil
+              {_, nil} -> nil
+              {store_name, store_key} -> {store_name, store_key}
+            end
+
+          {provided_state, store_opts}
+
+        # Original logic for when no initial_state is provided
+        {nil, nil, _} ->
+          {%{}, nil}
+
+        {nil, _, nil} ->
+          {%{}, nil}
+
+        {nil, store_name, store_key} ->
+          stored_state =
+            case Store.get(store_name, store_key) do
+              {:ok, state} -> state
+              _ -> %{}
+            end
+
+          {stored_state, {store_name, store_key}}
+      end
+
+    # Wrap with debug if enabled
+    flow_to_use =
+      if opts[:debug] do
+        Debug.trace_flow(opts[:name], flow)
+      else
+        flow
+      end
+
+    # Execute the flow with limits
+    flow_opts = [
+      timeout_ms: opts[:timeout_ms],
+      collect_stats: opts[:collect_stats],
+      return_stats: opts[:return_stats]
+    ]
+
+    # Call Flow.process_with_limits with the appropriate options
+    result = Flow.process_with_limits(flow_to_use, signal, initial_state, flow_opts)
+
+    # Handle the different result formats and update store if needed
+    case result do
+      # Success with statistics
+      {:ok, output, final_state, stats} ->
+        maybe_update_store(store_opts, final_state)
+        {:ok, output, final_state, stats}
+
+      # Success without statistics
+      {:ok, output, final_state} ->
+        maybe_update_store(store_opts, final_state)
+        {:ok, output, final_state}
+
+      # Error with state and statistics
+      {:error, reason, final_state, stats} ->
+        maybe_update_store(store_opts, final_state)
+        {:error, reason, final_state, stats}
+
+      # Error with state (for handler errors)
+      {:error, reason, final_state} ->
+        maybe_update_store(store_opts, final_state)
+        {:error, reason, final_state}
     end
+  end
+
+  # Private helpers
+
+  defp ensure_store_started(store_name) do
+    case Store.start_link(name: store_name) do
+      {:ok, pid} -> pid
+      {:error, {:already_started, pid}} -> pid
+      error -> raise "Failed to start store: #{inspect(error)}"
+    end
+  end
+
+  # Helper function to update store with cleaned state
+  defp maybe_update_store(nil, _state), do: :ok
+
+  defp maybe_update_store({store_name, store_key}, state) do
+    # Remove internal state keys to avoid polluting user state
+    clean_state =
+      state
+      |> Map.delete(:store_name)
+      |> Map.delete(:store_key)
+      |> Map.delete(:max_steps)
+      |> Map.delete(:timeout)
+      |> Map.delete(:return_stats)
+
+    Store.put(store_name, store_key, clean_state)
   end
 end
