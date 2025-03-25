@@ -232,17 +232,17 @@ defmodule AgentForge.RuntimeLimitsTest do
     test "preserves initial state when return_stats is true", %{store: store} do
       # Initial state to use
       initial_state = %{counter: 5, important: "data"}
-      
+
       # Set up the store with initial state
       :ok = Store.put(store, :test_state, initial_state)
-      
+
       handler = fn signal, state ->
         new_state = Map.update(state, :counter, 1, &(&1 + 1))
         {{:emit, Signal.new(:echo, signal.data)}, new_state}
       end
-      
+
       signal = Signal.new(:test, "data")
-      
+
       {:ok, _result, final_state, stats} =
         Runtime.execute_with_limits(
           [handler],
@@ -251,33 +251,33 @@ defmodule AgentForge.RuntimeLimitsTest do
           store_key: :test_state,
           return_stats: true
         )
-      
+
       # Check that the state was properly updated
       assert final_state.counter == 6
       assert final_state.important == "data"
-      
+
       # Check that stats were collected
       assert %ExecutionStats{} = stats
       assert stats.complete == true
-      
+
       # Verify the store was updated correctly
       {:ok, stored_state} = Store.get(store, :test_state)
       assert stored_state.counter == 6
     end
-    
+
     test "supports custom initial state", %{store: store} do
       # Create a handler that accesses custom_value from state
       handler = fn _signal, state ->
         custom_value = Map.get(state, :custom_value, "default")
         {{:emit, Signal.new(:echo, custom_value)}, state}
       end
-      
+
       # Set up the initial state in the store directly
       initial_state = %{custom_value: "custom data"}
       :ok = Store.put(store, :custom_state, initial_state)
-      
+
       signal = Signal.new(:test, "data")
-      
+
       {:ok, result, final_state} =
         Runtime.execute_with_limits(
           [handler],
@@ -286,10 +286,10 @@ defmodule AgentForge.RuntimeLimitsTest do
           store_key: :custom_state
           # We don't need to pass initial_state here since we've set it in the store
         )
-      
+
       assert result.data == "custom data"
       assert final_state.custom_value == "custom data"
-      
+
       # Verify the store was updated correctly
       {:ok, stored_state} = Store.get(store, :custom_state)
       assert stored_state.custom_value == "custom data"
