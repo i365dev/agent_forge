@@ -2,9 +2,14 @@ defmodule AgentForge.Flow do
   @moduledoc """
   Provides functions for processing signals through a chain of handlers.
   Each handler is a function that takes a signal and state, and returns a tuple with result and new state.
+  Automatically collects execution statistics for monitoring and debugging.
   """
 
   alias AgentForge.Signal
+  alias AgentForge.ExecutionStats
+
+  # Store last execution stats in module attribute
+  @last_execution_stats_key :"$agent_forge_last_execution_stats"
 
   @doc """
   Processes a signal through a list of handlers.
@@ -61,27 +66,34 @@ defmodule AgentForge.Flow do
   # Private functions
 
   defp process_handlers(handlers, signal, state) do
-    Enum.reduce_while(handlers, {:ok, signal, state}, fn handler,
-                                                         {:ok, current_signal, current_state} ->
+    stats = ExecutionStats.new()
+
+    Enum.reduce_while(handlers, {:ok, signal, state, stats}, fn handler,
+                                                                {:ok, current_signal,
+                                                                 current_state, current_stats} ->
+      # Record step before processing
+      updated_stats =
+        ExecutionStats.record_step(current_stats, handler, current_signal, current_state)
+
       case process_handler(handler, current_signal, current_state) do
         {{:emit, new_signal}, new_state} ->
-          {:cont, {:ok, new_signal, new_state}}
+          {:cont, {:ok, new_signal, new_state, updated_stats}}
 
         {{:emit_many, signals}, new_state} when is_list(signals) ->
           # When multiple signals are emitted, use the last one for continuation
-          {:cont, {:ok, List.last(signals), new_state}}
+          {:cont, {:ok, List.last(signals), new_state, updated_stats}}
 
         {:skip, new_state} ->
-          {:halt, {:ok, nil, new_state}}
+          {:halt, {:ok, nil, new_state, updated_stats}}
 
         {:halt, data} ->
-          {:halt, {:ok, data, state}}
+          {:halt, {:ok, data, state, updated_stats}}
 
         {{:halt, data}, _state} ->
-          {:halt, {:ok, data, state}}
+          {:halt, {:ok, data, state, updated_stats}}
 
         {{:error, reason}, new_state} ->
-          {:halt, {:error, reason, new_state}}
+          {:halt, {:error, reason, new_state, updated_stats}}
 
         {other, _} ->
           raise "Invalid handler result: #{inspect(other)}"
@@ -93,6 +105,23 @@ defmodule AgentForge.Flow do
   end
 
   # Handle the final result
-  defp handle_result({:ok, signal, state}), do: {:ok, signal, state}
-  defp handle_result({:error, reason, _state}), do: {:error, reason}
+  defp handle_result({:ok, signal, state, stats}) do
+    final_stats = ExecutionStats.finalize(stats, {:ok, signal})
+    Process.put(@last_execution_stats_key, final_stats)
+    {:ok, signal, state}
+  end
+
+  defp handle_result({:error, reason, _state, stats}) do
+    final_stats = ExecutionStats.finalize(stats, {:error, reason})
+    Process.put(@last_execution_stats_key, final_stats)
+    {:error, reason}
+  end
+
+  @doc """
+  Returns statistics from the last flow execution.
+  Returns nil if no flow has been executed yet.
+  """
+  def get_last_execution_stats do
+    Process.get(@last_execution_stats_key)
+  end
 end
