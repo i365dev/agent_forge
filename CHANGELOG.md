@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2025-03-26
+### Added
+- Implement Time-Based Flow Limits for Signal Processing
+- Add Execution Limits and Statistics Tracking
+
 ## [0.1.0] - 2025-03-23
 ### Added
 - Initial release
