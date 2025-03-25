@@ -126,7 +126,6 @@ defmodule AgentForge.FlowLimitsTest do
       end
 
       {:ok, result, _} = Flow.process_with_limits([multi_handler, verifier], signal, %{})
-
       assert result.type == :third
       assert result.data == "three"
     end
