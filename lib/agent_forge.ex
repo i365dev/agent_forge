@@ -91,17 +91,24 @@ defmodule AgentForge do
       "Success"
   """
   @spec process_with_limits(
-          Flow.flow(),
+          # handler functions
+          list(function()),
+          # input signal
           Signal.t(),
+          # initial state
           map(),
+          # options
           keyword()
         ) ::
           {:ok, Signal.t() | term(), term()}
-          | {:ok, Signal.t() | term(), term(), ExecutionStats.t()}
+          | {:ok, Signal.t() | term(), term(), AgentForge.ExecutionStats.t()}
           | {:error, term()}
-          | {:error, term(), ExecutionStats.t()}
+          | {:error, term(), map()}
+          | {:error, term(), AgentForge.ExecutionStats.t()}
   def process_with_limits(handlers, signal, initial_state, opts \\ []) do
-    Runtime.execute_with_limits(handlers, signal, initial_state, opts)
+    # Process using the Flow module's implementation directly
+    # This ensures that the implementation matches the signature in AgentForge
+    AgentForge.Flow.process_with_limits(handlers, signal, initial_state, opts)
   end
 
   @doc """

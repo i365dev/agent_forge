@@ -116,51 +116,111 @@ defmodule AgentForge.Runtime do
 
   @doc """
   Executes a flow with execution limits.
+
+  Enforces limits on execution (maximum steps and timeout) to prevent
+  infinite loops and long-running processes. Integrates with Store for
+  state persistence between executions.
+
+  ## Options
+    * `:max_steps` - Maximum number of handler executions allowed (defaults to :infinity)
+    * `:timeout` - Maximum execution time in milliseconds (defaults to :infinity)
+    * `:collect_stats` - Whether to collect execution statistics (defaults to true)
+    * `:return_stats` - Whether to include stats in the return value (defaults to false)
+    * `:debug` - Whether to enable debugging (defaults to false)
+    * `:name` - Name for debugging output (defaults to "flow")
+    * `:store_prefix` - Prefix for store keys (defaults to "flow")
+    * `:store_name` - Name of the store to use
+    * `:store_key` - Key within the store to access state
   """
-  @spec execute_with_limits(Flow.flow(), Signal.t(), map() | keyword(), runtime_options()) ::
+  @spec execute_with_limits(Flow.flow(), Signal.t(), runtime_options()) ::
           {:ok, Signal.t() | term(), term()}
           | {:ok, Signal.t() | term(), term(), ExecutionStats.t()}
+          | {:error, term()}
           | {:error, term(), map()}
-          | {:error, term(), map(), ExecutionStats.t()}
-  def execute_with_limits(flow, signal, initial_state, opts \\ []) do
-    # Ensure initial_state is a map
-    initial_state = convert_to_map(initial_state)
-
+          | {:error, term(), ExecutionStats.t()}
+  def execute_with_limits(flow, signal, opts \\ []) do
     # Merge default options
-    opts = merge_default_options(opts)
+    opts =
+      Keyword.merge(
+        [
+          debug: false,
+          name: "flow",
+          store_prefix: "flow",
+          max_steps: :infinity,
+          timeout: :infinity,
+          collect_stats: true,
+          return_stats: false
+        ],
+        opts
+      )
 
-    # Initialize store and state
-    {state_to_use, store_opts} = initialize_state(initial_state, opts)
+    # Initialize store if needed
+    {initial_state, store_opts} =
+      case {Keyword.get(opts, :store_name), Keyword.get(opts, :store_key)} do
+        {nil, _} ->
+          {%{}, nil}
 
-    # Extract flow options from runtime options
-    flow_opts = prepare_flow_options(opts)
+        {_, nil} ->
+          {%{}, nil}
+
+        {store_name, store_key} ->
+          stored_state =
+            case Store.get(store_name, store_key) do
+              {:ok, state} -> state
+              _ -> %{}
+            end
+
+          {stored_state, {store_name, store_key}}
+      end
 
     # Wrap with debug if enabled
-    flow_to_use = maybe_wrap_debug(flow, opts)
-
-    # Execute flow with limits and handle results
-    try do
-      case Flow.process_with_limits(flow_to_use, signal, state_to_use, flow_opts) do
-        {:ok, result, final_state} = success ->
-          maybe_update_store(store_opts, final_state)
-          success
-
-        {:ok, result, final_state, stats} = success ->
-          maybe_update_store(store_opts, final_state)
-          success
-
-        {:error, reason, state} = error ->
-          maybe_update_store(store_opts, state)
-          error
-
-        {:error, reason, state, stats} = error ->
-          maybe_update_store(store_opts, state)
-          error
+    flow_to_use =
+      if opts[:debug] do
+        Debug.trace_flow(opts[:name], flow)
+      else
+        flow
       end
-    catch
-      kind, error ->
-        error_msg = "Runtime error: #{inspect(kind)} - #{inspect(error)}"
-        {:error, error_msg, initial_state}
+
+    # Execute the flow with limits
+    flow_opts = [
+      max_steps: opts[:max_steps],
+      timeout: opts[:timeout],
+      collect_stats: opts[:collect_stats],
+      return_stats: opts[:return_stats]
+    ]
+
+    # Call Flow.process_with_limits with the appropriate options
+    result = Flow.process_with_limits(flow_to_use, signal, initial_state, flow_opts)
+
+    # Handle the different result formats and update store if needed
+    case result do
+      # Success with statistics
+      {:ok, outcome, final_state, stats} ->
+        maybe_update_store(store_opts, final_state)
+        {:ok, outcome, final_state, stats}
+
+      # Success without statistics
+      {:ok, outcome, final_state} ->
+        maybe_update_store(store_opts, final_state)
+        {:ok, outcome, final_state}
+
+      # Error with statistics
+      {:error, reason, stats} when is_struct(stats, ExecutionStats) ->
+        {:error, reason, stats}
+
+      # Error with state and statistics
+      {:error, reason, final_state, stats} ->
+        maybe_update_store(store_opts, final_state)
+        {:error, reason, final_state, stats}
+
+      # Error with state (for handler errors)
+      {:error, reason, final_state} ->
+        maybe_update_store(store_opts, final_state)
+        {:error, reason, final_state}
+
+      # Error without state (for limit violations)
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -174,70 +234,19 @@ defmodule AgentForge.Runtime do
     end
   end
 
-  defp convert_to_map(value) do
-    case value do
-      map when is_map(map) -> map
-      list when is_list(list) -> Map.new(list)
-      _ -> Map.new()
-    end
-  end
-
-  defp merge_default_options(opts) do
-    Keyword.merge(
-      [
-        debug: false,
-        name: "flow",
-        store_prefix: "flow",
-        max_steps: :infinity,
-        timeout: :infinity,
-        collect_stats: true,
-        return_stats: false
-      ],
-      opts
-    )
-  end
-
-  defp initialize_state(initial_state, opts) do
-    case {Keyword.get(opts, :store_name), Keyword.get(opts, :store_key)} do
-      {nil, _} ->
-        {initial_state, nil}
-
-      {_, nil} ->
-        {initial_state, nil}
-
-      {store_name, store_key} ->
-        stored_state =
-          case Store.get(store_name, store_key) do
-            {:ok, state} -> Map.merge(state, initial_state)
-            _ -> initial_state
-          end
-
-        {stored_state, {store_name, store_key}}
-    end
-  end
-
-  defp prepare_flow_options(opts) do
-    opts
-    |> Keyword.take([:max_steps, :timeout, :collect_stats, :return_stats])
-    |> Keyword.update(:max_steps, :infinity, &normalize_limit/1)
-    |> Keyword.update(:timeout, :infinity, &normalize_limit/1)
-  end
-
-  defp maybe_wrap_debug(flow, opts) do
-    if opts[:debug] do
-      Debug.trace_flow(opts[:name], flow)
-    else
-      flow
-    end
-  end
-
-  defp normalize_limit(:infinity), do: :infinity
-  defp normalize_limit(value) when is_integer(value), do: value
-  defp normalize_limit(_), do: :infinity
-
+  # Helper function to update store with cleaned state
   defp maybe_update_store(nil, _state), do: :ok
 
   defp maybe_update_store({store_name, store_key}, state) do
-    Store.put(store_name, store_key, state)
+    # Remove internal state keys to avoid polluting user state
+    clean_state =
+      state
+      |> Map.delete(:store_name)
+      |> Map.delete(:store_key)
+      |> Map.delete(:max_steps)
+      |> Map.delete(:timeout)
+      |> Map.delete(:return_stats)
+
+    Store.put(store_name, store_key, clean_state)
   end
 end
