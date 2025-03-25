@@ -70,6 +70,57 @@ defmodule AgentForge do
     Runtime.configure_stateful(handlers, opts)
   end
 
+  @doc """
+  Processes a flow with execution limits.
+  This can prevent infinite loops and long-running processing.
+
+  ## Options
+
+  * `:max_steps` - Maximum number of steps to execute (default: :infinity)
+  * `:timeout` - Maximum execution time in milliseconds (default: :infinity)
+  * `:collect_stats` - Whether to collect execution statistics (default: true)
+  * `:return_stats` - Whether to return statistics in the result (default: false)
+
+  ## Examples
+
+      iex> handlers = [
+      ...>   fn _signal, state -> {{:emit, AgentForge.Signal.new(:done, "Success")}, state} end
+      ...> ]
+      iex> {:ok, result, _} = AgentForge.process_with_limits(handlers, AgentForge.Signal.new(:test, "data"), %{})
+      iex> result.data
+      "Success"
+  """
+  @spec process_with_limits(
+          Flow.flow(),
+          Signal.t(),
+          map(),
+          keyword()
+        ) ::
+          {:ok, Signal.t() | term(), term()}
+          | {:ok, Signal.t() | term(), term(), ExecutionStats.t()}
+          | {:error, term()}
+          | {:error, term(), ExecutionStats.t()}
+  def process_with_limits(handlers, signal, initial_state, opts \\ []) do
+    Runtime.execute_with_limits(handlers, signal, initial_state, opts)
+  end
+
+  @doc """
+  Gets statistics from the last flow execution.
+  Returns nil if no flow has been executed yet or statistics collection was disabled.
+
+  ## Examples
+
+      iex> handlers = [fn signal, state -> {{:emit, signal}, state} end]
+      iex> signal = AgentForge.Signal.new(:test, "data")
+      iex> {:ok, _, _} = AgentForge.process_with_limits(handlers, signal, %{})
+      iex> stats = AgentForge.get_last_execution_stats()
+      iex> stats.steps
+      1
+  """
+  def get_last_execution_stats do
+    Runtime.get_last_execution_stats()
+  end
+
   # Re-export commonly used functions from Signal module
   defdelegate new_signal(type, data, meta \\ %{}), to: Signal, as: :new
   defdelegate emit(type, data, meta \\ %{}), to: Signal
