@@ -72,12 +72,11 @@ defmodule AgentForge do
 
   @doc """
   Processes a flow with execution limits.
-  This can prevent infinite loops and long-running processing.
+  This can prevent long-running operations.
 
   ## Options
 
-  * `:max_steps` - Maximum number of steps to execute (default: :infinity)
-  * `:timeout` - Maximum execution time in milliseconds (default: :infinity)
+  * `:timeout_ms` - Maximum execution time in milliseconds (default: 30000)
   * `:collect_stats` - Whether to collect execution statistics (default: true)
   * `:return_stats` - Whether to return statistics in the result (default: false)
 
@@ -102,13 +101,16 @@ defmodule AgentForge do
         ) ::
           {:ok, Signal.t() | term(), term()}
           | {:ok, Signal.t() | term(), term(), AgentForge.ExecutionStats.t()}
-          | {:error, term()}
-          | {:error, term(), map()}
-          | {:error, term(), AgentForge.ExecutionStats.t()}
+          | {:error, term(), term()}
+          | {:error, term(), term(), AgentForge.ExecutionStats.t()}
   def process_with_limits(handlers, signal, initial_state, opts \\ []) do
-    # Process using the Flow module's implementation directly
-    # This ensures that the implementation matches the signature in AgentForge
-    AgentForge.Flow.process_with_limits(handlers, signal, initial_state, opts)
+    # Use Runtime.execute_with_limits instead of directly calling Flow.process_with_limits
+    # This ensures proper state persistence between executions
+    Runtime.execute_with_limits(
+      handlers,
+      signal,
+      opts |> Keyword.put(:initial_state, initial_state)
+    )
   end
 
   @doc """

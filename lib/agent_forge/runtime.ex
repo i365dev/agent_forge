@@ -122,22 +122,21 @@ defmodule AgentForge.Runtime do
   state persistence between executions.
 
   ## Options
-    * `:max_steps` - Maximum number of handler executions allowed (defaults to :infinity)
-    * `:timeout` - Maximum execution time in milliseconds (defaults to :infinity)
-    * `:collect_stats` - Whether to collect execution statistics (defaults to true)
-    * `:return_stats` - Whether to include stats in the return value (defaults to false)
-    * `:debug` - Whether to enable debugging (defaults to false)
-    * `:name` - Name for debugging output (defaults to "flow")
-    * `:store_prefix` - Prefix for store keys (defaults to "flow")
+    * `:timeout_ms` - Maximum execution time in milliseconds (default: 30000)
+    * `:collect_stats` - Whether to collect execution statistics (default: true)
+    * `:return_stats` - Whether to include stats in the return value (default: false)
+    * `:debug` - Whether to enable debugging (default: false)
+    * `:name` - Name for debugging output (default: "flow")
+    * `:store_prefix` - Prefix for store keys (default: "flow")
     * `:store_name` - Name of the store to use
     * `:store_key` - Key within the store to access state
+    * `:initial_state` - Initial state to use for execution
   """
   @spec execute_with_limits(Flow.flow(), Signal.t(), runtime_options()) ::
           {:ok, Signal.t() | term(), term()}
           | {:ok, Signal.t() | term(), term(), ExecutionStats.t()}
-          | {:error, term()}
-          | {:error, term(), map()}
-          | {:error, term(), ExecutionStats.t()}
+          | {:error, term(), term()}
+          | {:error, term(), term(), ExecutionStats.t()}
   def execute_with_limits(flow, signal, opts \\ []) do
     # Merge default options
     opts =
@@ -146,8 +145,7 @@ defmodule AgentForge.Runtime do
           debug: false,
           name: "flow",
           store_prefix: "flow",
-          max_steps: :infinity,
-          timeout: :infinity,
+          timeout_ms: 30000,
           collect_stats: true,
           return_stats: false
         ],
@@ -156,14 +154,28 @@ defmodule AgentForge.Runtime do
 
     # Initialize store if needed
     {initial_state, store_opts} =
-      case {Keyword.get(opts, :store_name), Keyword.get(opts, :store_key)} do
-        {nil, _} ->
+      case {Keyword.get(opts, :initial_state), Keyword.get(opts, :store_name),
+            Keyword.get(opts, :store_key)} do
+        # Use provided initial_state when explicitly passed
+        {provided_state, _, _} when not is_nil(provided_state) ->
+          # Extract store options if available for persistence
+          store_opts =
+            case {Keyword.get(opts, :store_name), Keyword.get(opts, :store_key)} do
+              {nil, _} -> nil
+              {_, nil} -> nil
+              {store_name, store_key} -> {store_name, store_key}
+            end
+
+          {provided_state, store_opts}
+
+        # Original logic for when no initial_state is provided
+        {nil, nil, _} ->
           {%{}, nil}
 
-        {_, nil} ->
+        {nil, _, nil} ->
           {%{}, nil}
 
-        {store_name, store_key} ->
+        {nil, store_name, store_key} ->
           stored_state =
             case Store.get(store_name, store_key) do
               {:ok, state} -> state
@@ -183,8 +195,7 @@ defmodule AgentForge.Runtime do
 
     # Execute the flow with limits
     flow_opts = [
-      max_steps: opts[:max_steps],
-      timeout: opts[:timeout],
+      timeout_ms: opts[:timeout_ms],
       collect_stats: opts[:collect_stats],
       return_stats: opts[:return_stats]
     ]
@@ -195,18 +206,14 @@ defmodule AgentForge.Runtime do
     # Handle the different result formats and update store if needed
     case result do
       # Success with statistics
-      {:ok, outcome, final_state, stats} ->
+      {:ok, output, final_state, stats} ->
         maybe_update_store(store_opts, final_state)
-        {:ok, outcome, final_state, stats}
+        {:ok, output, final_state, stats}
 
       # Success without statistics
-      {:ok, outcome, final_state} ->
+      {:ok, output, final_state} ->
         maybe_update_store(store_opts, final_state)
-        {:ok, outcome, final_state}
-
-      # Error with statistics
-      {:error, reason, stats} when is_struct(stats, ExecutionStats) ->
-        {:error, reason, stats}
+        {:ok, output, final_state}
 
       # Error with state and statistics
       {:error, reason, final_state, stats} ->
@@ -217,10 +224,6 @@ defmodule AgentForge.Runtime do
       {:error, reason, final_state} ->
         maybe_update_store(store_opts, final_state)
         {:error, reason, final_state}
-
-      # Error without state (for limit violations)
-      {:error, reason} ->
-        {:error, reason}
     end
   end
 

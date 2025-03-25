@@ -93,6 +93,44 @@ Compose handlers into pipelines:
 workflow = [&validate/2, &process/2, &notify/2]
 ```
 
+## Execution Limits
+
+AgentForge now supports execution limits for flows to prevent long-running processes:
+
+```elixir
+# Create a handler
+handler = fn signal, state ->
+  # Processing logic...
+  {{:emit, Signal.new(:done, result)}, state}
+end
+
+# Apply timeout limit
+{:ok, result, state} = AgentForge.process_with_limits(
+  [handler], 
+  signal, 
+  %{}, 
+  timeout_ms: 5000  # Execution limited to 5 seconds
+)
+
+# Get execution statistics in the result
+{:ok, result, state, stats} = AgentForge.process_with_limits(
+  [handler], 
+  signal, 
+  %{}, 
+  return_stats: true
+)
+
+# Or retrieve the last execution statistics afterwards
+stats = AgentForge.get_last_execution_stats()
+```
+
+The execution limits feature supports the following options:
+- `timeout_ms`: Maximum execution time in milliseconds (default: `30000`)
+- `collect_stats`: Whether to collect execution statistics (default: `true`)
+- `return_stats`: Whether to include statistics in the return value (default: `false`)
+
+See the documentation for more details.
+
 ## Documentation
 
 - [Getting Started Guide](guides/getting_started.md)
