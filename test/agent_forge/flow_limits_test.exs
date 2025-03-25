@@ -35,7 +35,8 @@ defmodule AgentForge.FlowLimitsTest do
     test "enforces timeout limit" do
       # Create a slow handler
       slow_handler = fn signal, state ->
-        Process.sleep(50)  # delay for 50ms
+        # delay for 50ms
+        Process.sleep(50)
         {{:emit, signal}, state}
       end
 
@@ -51,7 +52,8 @@ defmodule AgentForge.FlowLimitsTest do
       signal = Signal.new(:test, "data")
       handler = fn sig, state -> {{:emit, Signal.new(:echo, sig.data)}, state} end
 
-      {:ok, result, state, stats} = Flow.process_with_limits([handler], signal, %{}, return_stats: true)
+      {:ok, result, state, stats} =
+        Flow.process_with_limits([handler], signal, %{}, return_stats: true)
 
       assert result.type == :echo
       assert result.data == "data"
@@ -66,7 +68,8 @@ defmodule AgentForge.FlowLimitsTest do
       signal = Signal.new(:test, "data")
       error_handler = fn _sig, _state -> {{:error, "test error"}, %{}} end
 
-      {:error, reason, stats} = Flow.process_with_limits([error_handler], signal, %{}, return_stats: true)
+      {:error, reason, stats} =
+        Flow.process_with_limits([error_handler], signal, %{}, return_stats: true)
 
       assert reason == "test error"
       assert %ExecutionStats{} = stats
@@ -79,7 +82,8 @@ defmodule AgentForge.FlowLimitsTest do
       signal = Signal.new(:test, "data")
       handler = fn sig, state -> {{:emit, Signal.new(:echo, sig.data)}, state} end
 
-      {:ok, result, state} = Flow.process_with_limits([handler], signal, %{}, collect_stats: false)
+      {:ok, result, state} =
+        Flow.process_with_limits([handler], signal, %{}, collect_stats: false)
 
       assert result.type == :echo
       assert result.data == "data"
@@ -89,6 +93,7 @@ defmodule AgentForge.FlowLimitsTest do
 
     test "handles skip with limits" do
       signal = Signal.new(:test, "data")
+
       handlers = [
         fn _sig, state -> {:skip, state} end,
         fn _sig, _state -> raise "Should not reach this" end
@@ -106,12 +111,13 @@ defmodule AgentForge.FlowLimitsTest do
         {{:emit, sig}, Map.put(state, :counter, Map.get(state, :counter, 0) + 1)}
       end
 
-      {:error, error} = Flow.process_with_limits(
-        [infinite_loop],
-        signal,
-        initial_state,
-        max_steps: 3
-      )
+      {:error, error} =
+        Flow.process_with_limits(
+          [infinite_loop],
+          signal,
+          initial_state,
+          max_steps: 3
+        )
 
       assert error =~ "exceeded maximum steps"
       assert Flow.get_last_execution_stats().max_state_size == 2
