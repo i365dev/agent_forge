@@ -42,4 +42,30 @@ defmodule AgentForge.ExamplesTest do
       assert output =~ ~r/data: "Job completed with result: \\"Completed\\""/
     end
   end
+
+  describe "limited_workflow.exs" do
+    test "demonstrates execution limits and statistics" do
+      output = capture_io(fn -> Code.eval_file("examples/limited_workflow.exs") end)
+
+      # Verify basic timeout example
+      assert output =~ "--- Basic Example with Timeout ---"
+      assert output =~ ~r/Processing signal: task -> "Sample data"/
+      assert output =~ ~r/Result: processed -> "Sample data"/
+
+      # Verify statistics collection
+      assert output =~ "--- Example with Statistics Collection ---"
+      assert output =~ "Validating data..."
+      assert output =~ "Transforming data..."
+      assert output =~ "Finalizing..."
+      assert output =~ ~r/Result: completed -> "Test data \(transformed\)"/
+      assert output =~ "Execution Statistics:"
+
+      # Verify timeout error handling
+      assert output =~ "--- Example with Timeout Error ---"
+      assert output =~ "Starting long process..."
+      assert output =~ "Error handled gracefully: "
+      assert output =~ "Timeout Statistics:"
+      assert output =~ "- Completed: true"
+    end
+  end
 end
