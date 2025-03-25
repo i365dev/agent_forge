@@ -66,7 +66,8 @@ defmodule AgentForge.ExecutionStatsTest do
       stats = ExecutionStats.new()
       result = {:ok, "success"}
 
-      :timer.sleep(1) # Ensure some time passes
+      # Ensure some time passes
+      :timer.sleep(1)
       stats = ExecutionStats.finalize(stats, result)
 
       assert stats.complete == true

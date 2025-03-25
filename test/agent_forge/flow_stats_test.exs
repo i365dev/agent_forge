@@ -48,6 +48,7 @@ defmodule AgentForge.FlowStatsTest do
 
     test "handles early termination with skip" do
       signal = Signal.new(:test, "data")
+
       handlers = [
         fn _sig, state -> {:skip, state} end,
         fn _sig, state -> {{:emit, Signal.new(:never_reached, "data")}, state} end
@@ -63,6 +64,7 @@ defmodule AgentForge.FlowStatsTest do
 
     test "handles errors in flow" do
       signal = Signal.new(:test, "data")
+
       handlers = [
         fn _sig, state -> {{:error, "test error"}, state} end
       ]
@@ -77,6 +79,7 @@ defmodule AgentForge.FlowStatsTest do
 
     test "tracks state size changes" do
       signal = Signal.new(:test, "data")
+
       handlers = [
         fn sig, state -> {{:emit, sig}, Map.put(state, :a, 1)} end,
         fn sig, state -> {{:emit, sig}, Map.put(state, :b, 2)} end,
@@ -91,12 +94,14 @@ defmodule AgentForge.FlowStatsTest do
 
     test "handles emit_many signals" do
       signal = Signal.new(:test, "data")
+
       handlers = [
         fn _sig, state ->
           signals = [
             Signal.new(:first, "data1"),
             Signal.new(:second, "data2")
           ]
+
           {{:emit_many, signals}, state}
         end
       ]
