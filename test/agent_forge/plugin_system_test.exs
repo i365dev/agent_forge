@@ -13,9 +13,10 @@ defmodule AgentForge.PluginSystemTest do
 
     @impl true
     def register_tools(registry) do
-      registry.register("mock_tool", fn params -> 
+      registry.register("mock_tool", fn params ->
         %{result: "Mock tool processed: #{inspect(params)}"}
       end)
+
       :ok
     end
 
@@ -71,7 +72,7 @@ defmodule AgentForge.PluginSystemTest do
     test "can list loaded plugins" do
       PluginManager.load_plugin(MockPlugin)
       plugins = PluginManager.list_plugins()
-      
+
       assert Map.has_key?(plugins, MockPlugin)
       plugin_data = Map.get(plugins, MockPlugin)
       assert plugin_data.name == "Mock Plugin"
@@ -83,7 +84,7 @@ defmodule AgentForge.PluginSystemTest do
     test "can use tools from a plugin" do
       PluginManager.load_plugin(MockPlugin)
       {:ok, tool_fn} = AgentForge.Tools.get("mock_tool")
-      
+
       result = tool_fn.(%{test: "data"})
       assert is_map(result)
       assert result.result =~ "Mock tool processed"
@@ -94,14 +95,14 @@ defmodule AgentForge.PluginSystemTest do
     test "can register and use a notification channel" do
       # Register the mock channel
       AgentForge.Notification.Registry.register_channel(MockChannel)
-      
+
       # Create a notification using the mock channel
       notify = AgentForge.Primitives.notify([:mock])
       signal = Signal.new(:event, "Test notification")
-      
+
       # Process the notification
       {{:emit, _result}, _state} = notify.(signal, %{})
-      
+
       # Verify the notification was sent
       messages = MockChannel.get_messages()
       assert length(messages) == 1
