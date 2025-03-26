@@ -133,6 +133,7 @@ See the documentation for more details.
 
 ## Documentation
 
+- [AgentForge Design Philosophy & Architecture Guide](guides/design_guide.md)
 - [Getting Started Guide](guides/getting_started.md)
 - [Core Concepts](guides/core_concepts.md)
 - [Contribution Guidelines](CONTRIBUTING.md)
@@ -193,12 +194,13 @@ mix docs
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for guidelines.
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Run the tests (`mix test`)
-4. Commit your changes (`git commit -m 'Add some amazing feature'`)
-5. Push to the branch (`git push origin feature/amazing-feature`)
-6. Open a Pull Request
+1. Read the [AgentForge Design Philosophy & Architecture Guide](guides/design_guide.md)
+2. Fork the repository
+3. Create your feature branch (`git checkout -b feature/amazing-feature`)
+4. Run the tests (`mix test`)
+5. Commit your changes (`git commit -m 'Add some amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
 
 ## License
 
