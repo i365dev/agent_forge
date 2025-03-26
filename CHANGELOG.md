@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-03-26
+### Added
+- Plugin system with formal plugin behavior interface
+- Central plugin manager for plugin lifecycle management
+- Tools registry for dynamic tool discovery and registration
+- Notification system with channel support
+- Built-in HTTP plugin as reference implementation
+- Comprehensive example (WeatherPlugin) demonstrating plugin functionality
+- Documentation for the plugin system
+
 ## [0.1.1] - 2025-03-26
 ### Added
 - Implement Time-Based Flow Limits for Signal Processing

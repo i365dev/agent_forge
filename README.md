@@ -32,13 +32,15 @@ graph TB
 # Add to mix.exs
 def deps do
   [
-    {:agent_forge, "~> 0.1.0"}
+    {:agent_forge, "~> 0.2.0"}
   ]
 end
 
 # Run
 mix deps.get
 ```
+
+> **Note**: AgentForge 0.2.0 introduces the plugin system! See the [Plugin System Guide](guides/plugin_system.md) for more details.
 
 ### Simple Example
 
