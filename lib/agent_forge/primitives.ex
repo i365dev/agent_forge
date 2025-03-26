@@ -182,32 +182,46 @@ defmodule AgentForge.Primitives do
   end
 
   @doc """
-  Creates a notify primitive that sends notifications or events.
-  Can be used to integrate with external notification systems.
+  Creates a notify primitive that sends notifications through configured channels.
 
   ## Options
 
-  * `:channels` - List of notification channels (e.g. [:console, :webhook])
+  * `:channels` - List of notification channels (e.g. [:console, :slack])
   * `:format` - Optional function to format the notification message
+  * `:config` - Optional configuration map for channels
 
   ## Examples
 
       iex> notify = AgentForge.Primitives.notify([:console])
-      iex> signal = AgentForge.Signal.new(:event, "test message")
+      iex> signal = AgentForge.Signal.new(:event, "System alert")
       iex> {{:emit, result}, _} = notify.(signal, %{})
       iex> result.type == :notification
       true
   """
   def notify(channels, opts \\ []) when is_list(channels) do
     format_fn = Keyword.get(opts, :format, &inspect/1)
+    config = Keyword.get(opts, :config, %{})
 
     fn signal, state ->
       message = format_fn.(signal.data)
 
-      Enum.each(channels, fn
-        :console -> IO.puts("[Notification] #{message}")
-        :webhook when is_map_key(state, :webhook_url) -> :ok
-        _ -> :ok
+      # Process each channel
+      Enum.each(channels, fn channel_name ->
+        case AgentForge.Notification.Registry.get_channel(channel_name) do
+          {:ok, channel_module} ->
+            # Get channel-specific config
+            channel_config = Map.get(config, channel_name, %{})
+            # Send notification
+            channel_module.send(message, channel_config)
+
+          :error when channel_name == :console ->
+            # Built-in console support for backward compatibility
+            IO.puts("[Notification] #{message}")
+
+          :error ->
+            # Channel not found, log warning
+            IO.warn("Notification channel not found: #{inspect(channel_name)}")
+        end
       end)
 
       {{:emit, Signal.new(:notification, message)}, state}

@@ -24,6 +24,7 @@ graph TB
 - ⚡ **Async Support**: Handle asynchronous operations
 - 🛠 **Configuration-based**: Define workflows in YAML
 - 💪 **Type-safe**: Leverages Elixir's pattern matching
+- 🔌 **Plugin System**: Extend functionality with custom plugins
 
 ## Quick Start
 
