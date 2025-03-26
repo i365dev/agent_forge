@@ -68,4 +68,24 @@ defmodule AgentForge.ExamplesTest do
       assert output =~ "- Completed: true"
     end
   end
+
+  describe "plugin_system.exs" do
+    test "demonstrates plugin system functionality" do
+      output = capture_io(fn -> Code.eval_file("examples/plugin_system.exs") end)
+
+      # Verify plugin initialization
+      assert output =~ "Initializing Weather Plugin"
+
+      # Verify plugin tool usage
+      assert output =~ "Checking weather for: San Francisco"
+      assert output =~ "Current conditions:"
+
+      # Verify notification channel functionality
+      assert output =~ "[Weather Alert - high] Extreme heat warning for Sahara Desert"
+
+      # Verify plugin metadata listing
+      assert output =~ "Loaded Plugins:"
+      assert output =~ "Weather Plugin v1.0.0: Provides weather forecast functionality"
+    end
+  end
 end
