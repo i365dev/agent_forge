@@ -48,7 +48,9 @@ defmodule AgentForge.MixProject do
       {:yaml_elixir, "~> 2.9"},
       # For mocking in tests
       {:meck, "~> 0.9", only: :test},
-      {:ex_doc, "~> 0.29", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.29", only: :dev, runtime: false},
+      # Optional dependencies for plugins
+      {:finch, "~> 0.16", optional: true}
     ]
   end
 
