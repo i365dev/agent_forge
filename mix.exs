@@ -49,6 +49,8 @@ defmodule AgentForge.MixProject do
       # For mocking in tests
       {:meck, "~> 0.9", only: :test},
       {:ex_doc, "~> 0.29", only: :dev, runtime: false},
+      # Code quality and static analysis
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       # Optional dependencies for plugins
       {:finch, "~> 0.16", optional: true}
     ]

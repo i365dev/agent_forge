@@ -77,43 +77,62 @@ defmodule AgentForge.Tools do
   """
   def execute_pipeline(tool_names, registry \\ __MODULE__) when is_list(tool_names) do
     fn signal, state ->
-      results =
-        Enum.reduce_while(tool_names, [], fn name, acc ->
-          case get(name, registry) do
-            {:ok, tool_fn} ->
-              try do
-                result = tool_fn.(signal.data)
+      results = process_tools(tool_names, signal, registry)
+      format_results(results, state)
+    end
+  end
 
-                meta =
-                  Map.merge(signal.meta, %{
-                    tool: name,
-                    last_tool: name,
-                    parent_trace_id: signal.meta.trace_id
-                  })
-
-                new_signal = Signal.new(:tool_result, result, meta)
-                {:cont, [new_signal | acc]}
-              rescue
-                e ->
-                  meta = Map.merge(signal.meta, %{tool: name})
-                  signal = Signal.new(:error, "Tool error: #{Exception.message(e)}", meta)
-                  {:halt, {:error, signal}}
-              end
-
-            {:error, reason} ->
-              meta = Map.merge(signal.meta, %{tool: name})
-              signal = Signal.new(:error, reason, meta)
-              {:halt, {:error, signal}}
-          end
-        end)
-
-      case results do
-        {:error, error_signal} ->
-          {{:emit, error_signal}, state}
-
-        signals when is_list(signals) ->
-          {{:emit_many, Enum.reverse(signals)}, state}
+  # Process each tool in the pipeline
+  defp process_tools(tool_names, signal, registry) do
+    Enum.reduce_while(tool_names, [], fn name, acc ->
+      case get(name, registry) do
+        {:ok, tool_fn} -> execute_tool(tool_fn, signal, name, acc)
+        {:error, reason} -> handle_tool_error(signal, name, reason)
       end
+    end)
+  end
+
+  # Execute a specific tool function
+  defp execute_tool(tool_fn, signal, name, acc) do
+    result = tool_fn.(signal.data)
+    meta = create_tool_meta(signal.meta, name)
+    new_signal = Signal.new(:tool_result, result, meta)
+    {:cont, [new_signal | acc]}
+  rescue
+    e ->
+      error_signal = create_error_signal(signal, name, "Tool error: #{Exception.message(e)}")
+      {:halt, {:error, error_signal}}
+  end
+
+  # Handle errors when a tool is not found
+  defp handle_tool_error(signal, name, reason) do
+    error_signal = create_error_signal(signal, name, reason)
+    {:halt, {:error, error_signal}}
+  end
+
+  # Create metadata for tool execution
+  defp create_tool_meta(original_meta, tool_name) do
+    Map.merge(original_meta, %{
+      tool: tool_name,
+      last_tool: tool_name,
+      parent_trace_id: original_meta.trace_id
+    })
+  end
+
+  # Create an error signal
+  defp create_error_signal(signal, tool_name, reason) do
+    meta = Map.merge(signal.meta, %{tool: tool_name})
+    Signal.new(:error, reason, meta)
+  end
+
+  # Format the results from tool processing
+  defp format_results(results, state) do
+    case results do
+      {:error, error_signal} ->
+        {{:emit, error_signal}, state}
+
+      signals when is_list(signals) ->
+        {{:emit_many, Enum.reverse(signals)}, state}
     end
   end
 

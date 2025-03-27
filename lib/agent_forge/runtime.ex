@@ -3,17 +3,17 @@ defmodule AgentForge.Runtime do
   Provides the runtime environment for executing flows in the AgentForge system.
   """
 
-  alias AgentForge.{Flow, Signal, Store, Debug, ExecutionStats}
+  alias AgentForge.{Debug, ExecutionStats, Flow, Signal, Store}
 
   @type runtime_options :: [
-          debug: boolean(),
-          name: String.t(),
-          store_prefix: String.t(),
-          store_name: atom(),
-          max_steps: non_neg_integer() | :infinity,
-          timeout: non_neg_integer() | :infinity,
           collect_stats: boolean(),
-          return_stats: boolean()
+          debug: boolean(),
+          max_steps: non_neg_integer() | :infinity,
+          name: String.t(),
+          return_stats: boolean(),
+          store_name: atom(),
+          store_prefix: String.t(),
+          timeout: non_neg_integer() | :infinity
         ]
 
   @spec execute(maybe_improper_list(), %{
@@ -145,7 +145,7 @@ defmodule AgentForge.Runtime do
           debug: false,
           name: "flow",
           store_prefix: "flow",
-          timeout_ms: 30000,
+          timeout_ms: 30_000,
           collect_stats: true,
           return_stats: false
         ],
@@ -153,37 +153,14 @@ defmodule AgentForge.Runtime do
       )
 
     # Initialize store if needed
+    # Determine initial state and store options
+    initial_state = Keyword.get(opts, :initial_state)
+    store_name = Keyword.get(opts, :store_name)
+    store_key = Keyword.get(opts, :store_key)
+
+    # Initialize default values
     {initial_state, store_opts} =
-      case {Keyword.get(opts, :initial_state), Keyword.get(opts, :store_name),
-            Keyword.get(opts, :store_key)} do
-        # Use provided initial_state when explicitly passed
-        {provided_state, _, _} when not is_nil(provided_state) ->
-          # Extract store options if available for persistence
-          store_opts =
-            case {Keyword.get(opts, :store_name), Keyword.get(opts, :store_key)} do
-              {nil, _} -> nil
-              {_, nil} -> nil
-              {store_name, store_key} -> {store_name, store_key}
-            end
-
-          {provided_state, store_opts}
-
-        # Original logic for when no initial_state is provided
-        {nil, nil, _} ->
-          {%{}, nil}
-
-        {nil, _, nil} ->
-          {%{}, nil}
-
-        {nil, store_name, store_key} ->
-          stored_state =
-            case Store.get(store_name, store_key) do
-              {:ok, state} -> state
-              _ -> %{}
-            end
-
-          {stored_state, {store_name, store_key}}
-      end
+      resolve_initial_state_and_store(initial_state, store_name, store_key)
 
     # Wrap with debug if enabled
     flow_to_use =
@@ -251,5 +228,41 @@ defmodule AgentForge.Runtime do
       |> Map.delete(:return_stats)
 
     Store.put(store_name, store_key, clean_state)
+  end
+
+  # Resolves the initial state and store options based on inputs
+  defp resolve_initial_state_and_store(initial_state, store_name, store_key) do
+    cond do
+      # When initial state is explicitly provided
+      not is_nil(initial_state) ->
+        store_opts = resolve_store_options(store_name, store_key)
+        {initial_state, store_opts}
+
+      # When store information is not complete
+      is_nil(store_name) or is_nil(store_key) ->
+        {%{}, nil}
+
+      # When we need to retrieve from store
+      true ->
+        stored_state = fetch_from_store(store_name, store_key)
+        {stored_state, {store_name, store_key}}
+    end
+  end
+
+  # Helper to determine store options
+  defp resolve_store_options(store_name, store_key) do
+    case {store_name, store_key} do
+      {nil, _} -> nil
+      {_, nil} -> nil
+      {name, key} -> {name, key}
+    end
+  end
+
+  # Helper to fetch state from store
+  defp fetch_from_store(store_name, store_key) do
+    case Store.get(store_name, store_key) do
+      {:ok, state} -> state
+      _ -> %{}
+    end
   end
 end

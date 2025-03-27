@@ -1,9 +1,7 @@
 defmodule AgentForge.FlowStatsTest do
   use ExUnit.Case
 
-  alias AgentForge.Flow
-  alias AgentForge.Signal
-  alias AgentForge.ExecutionStats
+  alias AgentForge.{ExecutionStats, Flow, Signal}
 
   setup do
     # Clear any previous execution stats before each test

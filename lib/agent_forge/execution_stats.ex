@@ -126,8 +126,6 @@ defmodule AgentForge.ExecutionStats do
   defp get_state_size(_), do: 0
 
   defp format_counters(counters) do
-    counters
-    |> Enum.map(fn {key, count} -> "#{key}: #{count}" end)
-    |> Enum.join(", ")
+    Enum.map_join(counters, ", ", fn {key, count} -> "#{key}: #{count}" end)
   end
 end

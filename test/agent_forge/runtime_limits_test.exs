@@ -1,10 +1,7 @@
 defmodule AgentForge.RuntimeLimitsTest do
   use ExUnit.Case
 
-  alias AgentForge.Runtime
-  alias AgentForge.Signal
-  alias AgentForge.ExecutionStats
-  alias AgentForge.Store
+  alias AgentForge.{ExecutionStats, Runtime, Signal, Store}
 
   setup do
     # Each test gets a unique store to avoid conflicts

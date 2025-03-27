@@ -25,7 +25,7 @@ defmodule AgentForge do
       # result.data will be "Got: Hello"
   """
 
-  alias AgentForge.{Signal, Runtime}
+  alias AgentForge.{Runtime, Signal}
 
   @doc """
   Creates a new flow with the given handlers and options.

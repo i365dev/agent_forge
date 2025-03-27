@@ -4,7 +4,7 @@ defmodule AgentForge.Config do
   Supports loading workflows from YAML or JSON.
   """
 
-  alias AgentForge.{Flow, Primitives, Tools, Signal, Runtime}
+  alias AgentForge.{Flow, Primitives, Runtime, Signal, Tools}
 
   @doc """
   Loads a workflow from a YAML or JSON string.
@@ -30,17 +30,11 @@ defmodule AgentForge.Config do
       true
   """
   def load_from_string(content) when is_binary(content) do
-    case parse_config(content) do
-      {:ok, config} ->
-        case build_flow(config) do
-          {:ok, handlers} ->
-            # Return an executable flow function
-            Runtime.configure(handlers)
-
-          {:error, reason} ->
-            fn _signal -> {:error, reason} end
-        end
-
+    with {:ok, config} <- parse_config(content),
+         {:ok, handlers} <- build_flow(config) do
+      # Return an executable flow function
+      Runtime.configure(handlers)
+    else
       {:error, reason} ->
         fn _signal -> {:error, reason} end
     end
@@ -69,14 +63,12 @@ defmodule AgentForge.Config do
   # Private functions
 
   defp parse_config(content) do
-    cond do
-      String.starts_with?(String.trim(content), "{") ->
-        # Looks like JSON
-        parse_json(content)
-
-      true ->
-        # Assume YAML
-        parse_yaml(content)
+    if String.starts_with?(String.trim(content), "{") do
+      # Looks like JSON
+      parse_json(content)
+    else
+      # Assume YAML
+      parse_yaml(content)
     end
   end
 
@@ -152,7 +144,7 @@ defmodule AgentForge.Config do
               {result, _} = Code.eval_string(custom, data: data)
               result
             rescue
-              e -> raise "Transform evaluation error: #{Exception.message(e)}"
+              e -> reraise "Transform evaluation error: #{Exception.message(e)}", __STACKTRACE__
             end
           end
 

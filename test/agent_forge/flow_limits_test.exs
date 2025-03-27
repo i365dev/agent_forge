@@ -1,9 +1,7 @@
 defmodule AgentForge.FlowLimitsTest do
   use ExUnit.Case
 
-  alias AgentForge.Flow
-  alias AgentForge.Signal
-  alias AgentForge.ExecutionStats
+  alias AgentForge.{ExecutionStats, Flow, Signal}
 
   describe "process_with_limits/4" do
     test "processes a simple flow without limits" do

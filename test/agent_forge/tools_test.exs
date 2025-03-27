@@ -2,7 +2,7 @@ defmodule AgentForge.ToolsTest do
   use ExUnit.Case
   doctest AgentForge.Tools
 
-  alias AgentForge.{Tools, Signal}
+  alias AgentForge.{Signal, Tools}
 
   setup do
     registry = String.to_atom("test_registry_#{System.unique_integer()}")

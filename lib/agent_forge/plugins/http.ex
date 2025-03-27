@@ -43,9 +43,7 @@ defmodule AgentForge.Plugins.HTTP do
   # Tool implementations
 
   defp http_get(params) do
-    if not Code.ensure_loaded?(Finch) do
-      %{error: :finch_not_installed, message: "Finch dependency is required for HTTP operations"}
-    else
+    if Code.ensure_loaded?(Finch) do
       url = Map.fetch!(params, "url")
       headers = Map.get(params, "headers", %{})
 
@@ -62,13 +60,13 @@ defmodule AgentForge.Plugins.HTTP do
         {:error, reason} ->
           %{error: reason}
       end
+    else
+      %{error: :finch_not_installed, message: "Finch dependency is required for HTTP operations"}
     end
   end
 
   defp http_post(params) do
-    if not Code.ensure_loaded?(Finch) do
-      %{error: :finch_not_installed, message: "Finch dependency is required for HTTP operations"}
-    else
+    if Code.ensure_loaded?(Finch) do
       url = Map.fetch!(params, "url")
       headers = Map.get(params, "headers", %{})
       body = Map.get(params, "body", "")
@@ -86,6 +84,8 @@ defmodule AgentForge.Plugins.HTTP do
         {:error, reason} ->
           %{error: reason}
       end
+    else
+      %{error: :finch_not_installed, message: "Finch dependency is required for HTTP operations"}
     end
   end
 

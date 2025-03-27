@@ -29,17 +29,16 @@ defmodule AgentForge.Primitives do
   """
   def branch(condition, then_flow, else_flow) when is_function(condition, 2) do
     fn signal, state ->
-      if condition.(signal, state) do
-        case Flow.process(then_flow, signal, state) do
-          {:ok, result, new_state} -> {{:emit, result}, new_state}
-          {:error, reason} -> {{:emit, Signal.new(:error, reason)}, state}
-        end
-      else
-        case Flow.process(else_flow, signal, state) do
-          {:ok, result, new_state} -> {{:emit, result}, new_state}
-          {:error, reason} -> {{:emit, Signal.new(:error, reason)}, state}
-        end
-      end
+      flow_to_use = if condition.(signal, state), do: then_flow, else: else_flow
+      process_branch_flow(flow_to_use, signal, state)
+    end
+  end
+
+  # Helper function to process the selected branch flow
+  defp process_branch_flow(flow, signal, state) do
+    case Flow.process(flow, signal, state) do
+      {:ok, result, new_state} -> {{:emit, result}, new_state}
+      {:error, reason} -> {{:emit, Signal.new(:error, reason)}, state}
     end
   end
 
@@ -86,9 +85,7 @@ defmodule AgentForge.Primitives do
     fn signal, state ->
       items = signal.data
 
-      if not is_list(items) do
-        {{:emit, Signal.new(:error, "Loop data must be a list")}, state}
-      else
+      if is_list(items) do
         try do
           {results, final_state} =
             Enum.reduce(items, {[], state}, fn item, {results, current_state} ->
@@ -104,8 +101,10 @@ defmodule AgentForge.Primitives do
           {{:emit_many, Enum.reverse(results)}, final_state}
         catch
           {:halt, result, new_state} -> {{:halt, result}, new_state}
-          {:error, reason} -> {{:emit, Signal.new(:error, reason)}, state}
+          {:error, reason} -> {{:error, reason}, state}
         end
+      else
+        {{:emit, Signal.new(:error, "Loop data must be a list")}, state}
       end
     end
   end
@@ -207,24 +206,29 @@ defmodule AgentForge.Primitives do
 
       # Process each channel
       Enum.each(channels, fn channel_name ->
-        case AgentForge.Notification.Registry.get_channel(channel_name) do
-          {:ok, channel_module} ->
-            # Get channel-specific config
-            channel_config = Map.get(config, channel_name, %{})
-            # Send notification
-            channel_module.send(message, channel_config)
-
-          :error when channel_name == :console ->
-            # Built-in console support for backward compatibility
-            IO.puts("[Notification] #{message}")
-
-          :error ->
-            # Channel not found, log warning
-            IO.warn("Notification channel not found: #{inspect(channel_name)}")
-        end
+        send_notification(channel_name, message, config)
       end)
 
       {{:emit, Signal.new(:notification, message)}, state}
+    end
+  end
+
+  # Helper function to send a notification to a specific channel
+  defp send_notification(channel_name, message, config) do
+    case AgentForge.Notification.Registry.get_channel(channel_name) do
+      {:ok, channel_module} ->
+        # Get channel-specific config
+        channel_config = Map.get(config, channel_name, %{})
+        # Send notification
+        channel_module.send(message, channel_config)
+
+      :error when channel_name == :console ->
+        # Built-in console support for backward compatibility
+        IO.puts("[Notification] #{message}")
+
+      :error ->
+        # Channel not found, log warning
+        IO.warn("Notification channel not found: #{inspect(channel_name)}")
     end
   end
 end

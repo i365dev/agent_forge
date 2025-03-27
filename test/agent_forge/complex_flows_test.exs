@@ -1,7 +1,7 @@
 defmodule AgentForge.ComplexFlowsTest do
   use ExUnit.Case, async: false
 
-  alias AgentForge.{Signal, Flow, Tools, Primitives, DynamicFlow}
+  alias AgentForge.{DynamicFlow, Flow, Primitives, Signal, Tools}
 
   setup do
     # Set up test state store
