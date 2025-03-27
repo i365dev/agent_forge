@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2025-03-27
+### Changed
+- Improved code quality and readability throughout the codebase
+- Reduced nested code in flow.ex, runtime.ex, primitives.ex, and tools.ex
+- Converted explicit try blocks to implicit try patterns
+- Removed trailing whitespace throughout codebase
+- Extracted helper functions to improve readability and reduce complexity
+
 ## [0.2.0] - 2025-03-26
 ### Added
 - Plugin system with formal plugin behavior interface
