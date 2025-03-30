@@ -163,13 +163,7 @@ defmodule AgentForge.Flow do
 
       # Handle legacy result format
       {signal_result, new_state} ->
-        case signal_result do
-          {:emit, new_signal} -> {:ok, new_signal, new_state, stats}
-          :skip -> {:ok, nil, new_state, stats}
-          {:halt, result} -> {:ok, result, new_state, stats}
-          {:error, reason} -> {:error, reason, new_state, stats}
-          _ -> {:error, "Invalid result format: #{inspect(signal_result)}", state, stats}
-        end
+        normalize_legacy_result(signal_result, new_state, state, stats)
 
       # State-only result (treat as a successful flow with no output signal)
       %{} = new_state ->
@@ -178,6 +172,17 @@ defmodule AgentForge.Flow do
       # Unrecognized format
       other ->
         {:error, "Unrecognized flow result: #{inspect(other)}", state, stats}
+    end
+  end
+
+  # Handle legacy result format
+  defp normalize_legacy_result(signal_result, new_state, state, stats) do
+    case signal_result do
+      {:emit, new_signal} -> {:ok, new_signal, new_state, stats}
+      :skip -> {:ok, nil, new_state, stats}
+      {:halt, result} -> {:ok, result, new_state, stats}
+      {:error, reason} -> {:error, reason, new_state, stats}
+      _ -> {:error, "Invalid result format: #{inspect(signal_result)}", state, stats}
     end
   end
 
@@ -393,68 +398,123 @@ defmodule AgentForge.Flow do
           else: nil
 
       # Process handler
-      case process_handler(handler, current_signal, current_state) do
-        # Enhanced emit handling with signal strategies
-        {{:emit, new_signal}, new_state} ->
-          case signal_strategy do
-            :forward ->
-              # Default behavior: forward signal to next handler
-              {:cont, {:ok, new_signal, new_state, updated_stats}}
-
-            :restart ->
-              # Restart processing chain with new signal
-              result = process_handlers(handlers, new_signal, new_state, opts)
-              {:halt, result}
-
-            :transform ->
-              # Transform signal using provided function
-              transformed_signal = transform_fn.(new_signal)
-              {:cont, {:ok, transformed_signal, new_state, updated_stats}}
-          end
-
-        # Support for emit_many format
-        {{:emit_many, signals}, new_state} when is_list(signals) ->
-          # When multiple signals are emitted, use the last one for continuation
-          last_signal = List.last(signals)
-          {:cont, {:ok, last_signal, new_state, updated_stats}}
-
-        # Enhanced skip handling with continue_on_skip option
-        {:skip, new_state} ->
-          if continue_on_skip do
-            # Continue to next handler with current signal
-            {:cont, {:ok, current_signal, new_state, updated_stats}}
-          else
-            # Original behavior: halt processing
-            {:halt, {:ok, nil, new_state, updated_stats}}
-          end
-
-        # Error handling (unchanged)
-        {{:error, reason}, new_state} ->
-          {:halt, {:error, reason, new_state, updated_stats}}
-
-        # Support for alternative halt format
-        {:halt, result} ->
-          {:halt, {:ok, result, current_state, updated_stats}}
-
-        # Support for halt with state
-        {{:halt, result}, new_state} ->
-          {:halt, {:ok, result, new_state, updated_stats}}
-
-        # New branch control flow
-        {:branch, condition, true_state, false_state} ->
-          if condition do
-            # Take the true branch
-            {:cont, {:ok, current_signal, true_state, updated_stats}}
-          else
-            # Take the false branch
-            {:cont, {:ok, current_signal, false_state, updated_stats}}
-          end
-
-        # Invalid result handling
-        other ->
-          raise "Invalid handler result: #{inspect(other)}"
-      end
+      process_handler_result(
+        handler,
+        current_signal,
+        current_state,
+        updated_stats,
+        continue_on_skip,
+        signal_strategy,
+        transform_fn,
+        opts
+      )
     end)
+  end
+
+  # Process the result from a handler and determine what to do next
+  defp process_handler_result(
+         handler,
+         current_signal,
+         current_state,
+         stats,
+         continue_on_skip,
+         signal_strategy,
+         transform_fn,
+         opts
+       ) do
+    case process_handler(handler, current_signal, current_state) do
+      # Enhanced emit handling with signal strategies
+      {{:emit, new_signal}, new_state} ->
+        handle_emit_result(
+          new_signal,
+          new_state,
+          stats,
+          signal_strategy,
+          transform_fn,
+          handler,
+          opts
+        )
+
+      # Support for emit_many format
+      {{:emit_many, signals}, new_state} when is_list(signals) ->
+        # When multiple signals are emitted, use the last one for continuation
+        last_signal = List.last(signals)
+        {:cont, {:ok, last_signal, new_state, stats}}
+
+      # Enhanced skip handling with continue_on_skip option
+      {:skip, new_state} ->
+        handle_skip_result(current_signal, new_state, stats, continue_on_skip)
+
+      # Error handling
+      {{:error, reason}, new_state} ->
+        {:halt, {:error, reason, new_state, stats}}
+
+      # Support for alternative halt format
+      {:halt, result} ->
+        {:halt, {:ok, result, current_state, stats}}
+
+      # Support for halt with state
+      {{:halt, result}, new_state} ->
+        {:halt, {:ok, result, new_state, stats}}
+
+      # Branch control flow
+      {:branch, condition, true_state, false_state} ->
+        handle_branch_result(condition, current_signal, true_state, false_state, stats)
+
+      # Invalid result handling
+      other ->
+        raise "Invalid handler result: #{inspect(other)}"
+    end
+  end
+
+  # Handle emit result based on signal strategy
+  defp handle_emit_result(
+         new_signal,
+         new_state,
+         stats,
+         signal_strategy,
+         transform_fn,
+         _handler,
+         opts
+       ) do
+    case signal_strategy do
+      :forward ->
+        # Default behavior: forward signal to next handler
+        {:cont, {:ok, new_signal, new_state, stats}}
+
+      :restart ->
+        # Restart processing chain with new signal
+        handlers = Keyword.get(opts, :handlers, [])
+        result = process_handlers(handlers, new_signal, new_state, opts)
+        {:halt, result}
+
+      :transform ->
+        # Transform signal using provided function
+        transformed_signal = transform_fn.(new_signal)
+        {:cont, {:ok, transformed_signal, new_state, stats}}
+    end
+  end
+
+  # Handle skip result based on continue_on_skip option
+  defp handle_skip_result(current_signal, new_state, stats, continue_on_skip) do
+    if continue_on_skip do
+      # Continue to next handler with current signal
+      {:cont, {:ok, current_signal, new_state, stats}}
+    else
+      # Original behavior: halt processing
+      {:halt, {:ok, nil, new_state, stats}}
+    end
+  end
+
+  # Handle branch result based on condition
+  defp handle_branch_result(condition, current_signal, true_state, false_state, stats) do
+    if condition do
+      # Take the true branch
+      {:cont, {:ok, current_signal, true_state, stats}}
+    else
+      # Take the false branch
+      {:cont, {:ok, current_signal, false_state, stats}}
+    end
   end
 
   @doc """
