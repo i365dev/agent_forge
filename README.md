@@ -32,7 +32,7 @@ graph TB
 # Add to mix.exs
 def deps do
   [
-    {:agent_forge, "~> 0.2.1"}
+    {:agent_forge, "~> 0.2.2"}
   ]
 end
 
@@ -40,7 +40,7 @@ end
 mix deps.get
 ```
 
-> **Note**: AgentForge 0.2.1 introduces the plugin system with improved code quality! See the [Plugin System Guide](guides/plugin_system.md) for more details.
+> **Note**: AgentForge 0.2.2 introduces enhanced flow control features! See the [Flow Control Guide](guides/flow_control.md) for more details.
 
 ### Simple Example
 
@@ -146,6 +146,9 @@ See the documentation for more details.
 - [Data Processing](examples/data_processing.exs): Basic data transformation pipeline
 - [Async Workflow](examples/async_workflow.exs): Handling async operations
 - [Configuration-based](examples/config_workflow.exs): YAML-defined workflows
+- [Flow Control](examples/enhanced_flow_control.exs): Advanced flow control features
+- [Limited Workflow](examples/limited_workflow.exs): Execution limits example
+- [Plugin System](examples/plugin_system.exs): Plugin system example
 
 ## Design Philosophy
 

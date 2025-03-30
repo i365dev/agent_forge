@@ -77,20 +77,23 @@ defmodule WeatherNotificationChannel do
 end
 
 # Start necessary processes
-_registry_pid = case AgentForge.Notification.Registry.start_link([]) do
-  {:ok, pid} -> pid
-  {:error, {:already_started, pid}} -> pid
-end
+_registry_pid =
+  case AgentForge.Notification.Registry.start_link([]) do
+    {:ok, pid} -> pid
+    {:error, {:already_started, pid}} -> pid
+  end
 
-_plugin_manager_pid = case AgentForge.PluginManager.start_link([]) do
-  {:ok, pid} -> pid
-  {:error, {:already_started, pid}} -> pid
-end
+_plugin_manager_pid =
+  case AgentForge.PluginManager.start_link([]) do
+    {:ok, pid} -> pid
+    {:error, {:already_started, pid}} -> pid
+  end
 
-_tools_pid = case AgentForge.Tools.start_link([]) do
-  {:ok, pid} -> pid
-  {:error, {:already_started, pid}} -> pid
-end
+_tools_pid =
+  case AgentForge.Tools.start_link([]) do
+    {:ok, pid} -> pid
+    {:error, {:already_started, pid}} -> pid
+  end
 
 # Load the weather plugin
 IO.puts("Initializing Weather Plugin")
@@ -99,22 +102,23 @@ IO.puts("Initializing Weather Plugin")
 # Define a simple flow that uses the weather plugin
 process_weather = fn signal, state ->
   location = signal.data
-  
+
   # Use the plugin tool to get weather forecast
   {:ok, forecast_tool} = AgentForge.Tools.get("get_forecast")
   forecast = forecast_tool.(%{"location" => location})
-  
+
   # Emit a notification for extreme temperatures
   if forecast.temperature > 30 do
-    notify = AgentForge.Primitives.notify(
-      [:weather_alert], 
-      config: %{weather_alert: %{priority: "high"}}
-    )
-    
+    notify =
+      AgentForge.Primitives.notify(
+        [:weather_alert],
+        config: %{weather_alert: %{priority: "high"}}
+      )
+
     alert_signal = AgentForge.Signal.new(:alert, "Extreme heat warning for #{location}")
     notify.(alert_signal, state)
   end
-  
+
   # Return the forecast data
   {{:emit, forecast}, state}
 end
@@ -130,20 +134,20 @@ Enum.each(locations, fn location ->
   IO.puts("\nChecking weather for: #{location}")
   {:ok, result, _state} = AgentForge.Flow.process(flow, signal, %{})
   IO.puts("Current conditions: #{result.temperature}°C, #{result.conditions}")
-  
+
   # For demo purposes, simulate a high temperature for Sahara Desert
   if location == "Sahara Desert" do
     hot_signal = AgentForge.Signal.new(:location, location)
     # Monkey patch the forecast tool temporarily to return extreme temperature
     {:ok, old_fn} = AgentForge.Tools.get("get_forecast")
-    
+
     AgentForge.Tools.register("get_forecast", fn params ->
       result = old_fn.(params)
       Map.put(result, :temperature, 45)
     end)
-    
+
     {:ok, _result, _state} = AgentForge.Flow.process(flow, hot_signal, %{})
-    
+
     # Restore original function
     AgentForge.Tools.register("get_forecast", old_fn)
   end
@@ -152,6 +156,7 @@ end)
 # List all loaded plugins and their metadata
 plugins = AgentForge.PluginManager.list_plugins()
 IO.puts("\nLoaded Plugins:")
+
 Enum.each(plugins, fn {_module, metadata} ->
   IO.puts("- #{metadata.name} v#{metadata.version}: #{metadata.description}")
 end)

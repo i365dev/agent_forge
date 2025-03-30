@@ -10,13 +10,17 @@ defmodule ConfigWorkflow do
 
   def validate_field(data, field, rules) do
     value = Map.get(data, String.to_atom(field))
+
     cond do
       rules["required"] && is_nil(value) ->
         {:error, "#{field} is required"}
+
       rules["type"] == "number" && not is_number(value) ->
         {:error, "#{field} must be a number"}
+
       rules["min"] && value < rules["min"] ->
         {:error, "#{field} must be at least #{rules["min"]}"}
+
       true ->
         {:ok, value}
     end
@@ -24,18 +28,21 @@ defmodule ConfigWorkflow do
 
   def create_validation_transform(config) do
     fn signal, state ->
-      result = Enum.reduce_while(config["validate"], {:ok, signal.data}, fn rule, {:ok, acc} ->
-        case validate_field(acc, rule["field"], rule) do
-          {:ok, _} ->
-            {:cont, {:ok, acc}}
-          {:error, reason} ->
-            {:halt, {:error, reason}}
-        end
-      end)
+      result =
+        Enum.reduce_while(config["validate"], {:ok, signal.data}, fn rule, {:ok, acc} ->
+          case validate_field(acc, rule["field"], rule) do
+            {:ok, _} ->
+              {:cont, {:ok, acc}}
+
+            {:error, reason} ->
+              {:halt, {:error, reason}}
+          end
+        end)
 
       case result do
         {:ok, data} ->
           {Signal.emit(:validated, data), state}
+
         {:error, reason} ->
           {Signal.halt(reason), state}
       end
@@ -45,12 +52,15 @@ defmodule ConfigWorkflow do
   def create_enrichment_transform(config) do
     fn signal, state ->
       try do
-        enriched_data = Enum.reduce(config["add_fields"], signal.data, fn
-          %{"timestamp" => "now()"}, acc ->
-            Map.put(acc, :timestamp, DateTime.utc_now())
-          field, acc ->
-            Map.merge(acc, field)
-        end)
+        enriched_data =
+          Enum.reduce(config["add_fields"], signal.data, fn
+            %{"timestamp" => "now()"}, acc ->
+              Map.put(acc, :timestamp, DateTime.utc_now())
+
+            field, acc ->
+              Map.merge(acc, field)
+          end)
+
         {Signal.emit(:enriched, enriched_data), state}
       rescue
         e in RuntimeError -> {Signal.emit(:error, e.message), state}
@@ -59,16 +69,19 @@ defmodule ConfigWorkflow do
   end
 
   def create_branch(config, flows) do
-    condition = case config["condition"] do
-      "age >= 18" ->
-        fn signal, _ -> Map.get(signal.data, :age) >= 18 end
-    end
+    condition =
+      case config["condition"] do
+        "age >= 18" ->
+          fn signal, _ -> Map.get(signal.data, :age) >= 18 end
+      end
 
-    then_flow = flows[config["then_flow"]]
-    |> Enum.map(fn step -> create_handler(step, flows) end)
+    then_flow =
+      flows[config["then_flow"]]
+      |> Enum.map(fn step -> create_handler(step, flows) end)
 
-    else_flow = flows[config["else_flow"]]
-    |> Enum.map(fn step -> create_handler(step, flows) end)
+    else_flow =
+      flows[config["else_flow"]]
+      |> Enum.map(fn step -> create_handler(step, flows) end)
 
     Primitives.branch(condition, then_flow, else_flow)
   end
@@ -76,9 +89,10 @@ defmodule ConfigWorkflow do
   def create_notification(config) do
     fn signal, state ->
       try do
-        message = config["message"]
-        |> String.replace("{name}", to_string(Map.get(signal.data, :name)))
-        |> String.replace("{age}", to_string(Map.get(signal.data, :age)))
+        message =
+          config["message"]
+          |> String.replace("{name}", to_string(Map.get(signal.data, :name)))
+          |> String.replace("{age}", to_string(Map.get(signal.data, :age)))
 
         {Signal.emit(:notification, message), state}
       rescue
@@ -91,10 +105,13 @@ defmodule ConfigWorkflow do
     case {step["type"], step["name"]} do
       {"transform", "validate_input"} ->
         create_validation_transform(step["config"])
+
       {"transform", "enrich_data"} ->
         create_enrichment_transform(step["config"])
+
       {"branch", _} ->
         create_branch(step["config"], flows)
+
       {"notify", _} ->
         create_notification(step["config"])
     end
@@ -180,7 +197,7 @@ defmodule ConfigWorkflow do
     IO.puts("\nUsing #{if File.exists?(yaml_path), do: "YAML configuration", else: "stub data"}")
 
     # Create handlers from configuration
-    handlers = Enum.map(workflow["steps"], & create_handler(&1, workflow["flows"]))
+    handlers = Enum.map(workflow["steps"], &create_handler(&1, workflow["flows"]))
 
     # Test data
     test_cases = [
@@ -200,6 +217,7 @@ defmodule ConfigWorkflow do
       case process_with_error_handling(handlers, signal, state) do
         {:ok, result} ->
           IO.puts("Success: #{inspect(result)}")
+
         {:error, reason} ->
           IO.puts("Error: #{reason}")
       end
@@ -210,11 +228,15 @@ defmodule ConfigWorkflow do
     case Flow.process(handlers, signal, state) do
       {:ok, result, _} ->
         {:ok, result}
+
       {:error, {:badmap, msg}} ->
-        clean_msg = msg
-        |> String.replace(~r/Transform error: expected a map got: "/, "")
-        |> String.replace(~r/"$/, "")
+        clean_msg =
+          msg
+          |> String.replace(~r/Transform error: expected a map got: "/, "")
+          |> String.replace(~r/"$/, "")
+
         {:error, clean_msg}
+
       {:error, reason} ->
         {:error, format_error(reason)}
     end

@@ -10,32 +10,36 @@ defmodule DataProcessing do
 
   def process_orders do
     # Define data validation
-    validate_order = Primitives.transform(fn order ->
-      cond do
-        is_nil(order.id) -> raise "Order ID is required"
-        order.amount <= 0 -> raise "Invalid order amount"
-        true -> order
-      end
-    end)
+    validate_order =
+      Primitives.transform(fn order ->
+        cond do
+          is_nil(order.id) -> raise "Order ID is required"
+          order.amount <= 0 -> raise "Invalid order amount"
+          true -> order
+        end
+      end)
 
     # Transform orders to add tax
-    add_tax = Primitives.transform(fn order ->
-      tax = order.amount * 0.1
-      Map.put(order, :total, order.amount + tax)
-    end)
+    add_tax =
+      Primitives.transform(fn order ->
+        tax = order.amount * 0.1
+        Map.put(order, :total, order.amount + tax)
+      end)
 
     # Branch based on order size
-    route_order = Primitives.branch(
-      fn signal, _ -> signal.data.total > 1000 end,
-      [fn signal, state -> {Signal.emit(:large_order, signal.data), state} end],
-      [fn signal, state -> {Signal.emit(:standard_order, signal.data), state} end]
-    )
+    route_order =
+      Primitives.branch(
+        fn signal, _ -> signal.data.total > 1000 end,
+        [fn signal, state -> {Signal.emit(:large_order, signal.data), state} end],
+        [fn signal, state -> {Signal.emit(:standard_order, signal.data), state} end]
+      )
 
     # Create notification for large orders
-    notify_large_order = Primitives.notify(
-      [:console],
-      format: fn order -> "Large order received: ##{order.id} (Total: $#{order.total})" end
-    )
+    notify_large_order =
+      Primitives.notify(
+        [:console],
+        format: fn order -> "Large order received: ##{order.id} (Total: $#{order.total})" end
+      )
 
     # Compose the workflow
     large_order_flow = [
@@ -69,6 +73,7 @@ defmodule DataProcessing do
           case Flow.process(large_order_flow, signal, state2) do
             {:ok, result, _final_state} ->
               IO.puts("Large order processed: #{inspect(result)}")
+
             {:error, reason} ->
               IO.puts("Error processing large order: #{reason}")
           end
@@ -77,6 +82,7 @@ defmodule DataProcessing do
           case Flow.process(standard_order_flow, signal, state2) do
             {:ok, result, _final_state} ->
               IO.puts("Standard order processed: #{inspect(result)}")
+
             {:error, reason} ->
               IO.puts("Error processing standard order: #{reason}")
           end

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2025-03-30
+### Added
+- Enhanced flow control with signal strategies:
+  - Forward strategy (default) - passes signals unchanged to next handler
+  - Transform strategy - modifies signals before passing to next handler
+  - Restart strategy - allows handlers to restart the flow with a new signal
+- Added `continue_on_skip` option to allow flow continuation after a skip result
+- Improved function flow processing with more robust result normalization
+- New enhanced_flow_control.exs example demonstrating all flow control features
+- Added comprehensive flow control documentation in guides/flow_control.md
+
+### Fixed
+- Resolved potential infinite loop issue in restart strategy with termination conditions
+- Fixed minor code formatting and style issues throughout the codebase
+
 ## [0.2.1] - 2025-03-27
 ### Changed
 - Improved code quality and readability throughout the codebase
@@ -48,5 +63,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tool registry for extensible command execution
 - Comprehensive documentation and examples
 
-[Unreleased]: https://github.com/USERNAME/agent_forge/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/USERNAME/agent_forge/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/USERNAME/agent_forge/releases/tag/v0.2.2
 [0.1.0]: https://github.com/USERNAME/agent_forge/releases/tag/v0.1.0

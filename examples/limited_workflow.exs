@@ -29,19 +29,22 @@ defmodule Examples.LimitedWorkflow do
     # Define a simple handler
     handler = fn signal, state ->
       IO.puts("Processing signal: #{signal.type} -> #{inspect(signal.data)}")
-      Process.sleep(100) # Simulate some work
+      # Simulate some work
+      Process.sleep(100)
       {{:emit, Signal.new(:processed, signal.data)}, state}
     end
 
     # Create signal and process with a generous timeout
     signal = Signal.new(:task, "Sample data")
 
-    {:ok, result, _state} = Flow.process_with_limits(
-      [handler],
-      signal,
-      %{},
-      timeout_ms: 5000 # 5 second timeout
-    )
+    {:ok, result, _state} =
+      Flow.process_with_limits(
+        [handler],
+        signal,
+        %{},
+        # 5 second timeout
+        timeout_ms: 5000
+      )
 
     IO.puts("Result: #{result.type} -> #{inspect(result.data)}")
   end
@@ -54,21 +57,24 @@ defmodule Examples.LimitedWorkflow do
       # First handler - validate data
       fn signal, state ->
         IO.puts("Validating data...")
-        Process.sleep(50) # Simulate validation
+        # Simulate validation
+        Process.sleep(50)
         {{:emit, Signal.new(:validated, signal.data)}, state}
       end,
 
       # Second handler - transform data
       fn signal, state ->
         IO.puts("Transforming data...")
-        Process.sleep(100) # Simulate transformation
+        # Simulate transformation
+        Process.sleep(100)
         {{:emit, Signal.new(:transformed, "#{signal.data} (transformed)")}, state}
       end,
 
       # Third handler - finalize
       fn signal, state ->
         IO.puts("Finalizing...")
-        Process.sleep(75) # Simulate finalization
+        # Simulate finalization
+        Process.sleep(75)
         {{:emit, Signal.new(:completed, signal.data)}, state}
       end
     ]
@@ -76,13 +82,15 @@ defmodule Examples.LimitedWorkflow do
     # Create signal and process with statistics
     signal = Signal.new(:input, "Test data")
 
-    {:ok, result, _state, stats} = Flow.process_with_limits(
-      handlers,
-      signal,
-      %{},
-      timeout_ms: 5000,
-      return_stats: true # Return stats in the result
-    )
+    {:ok, result, _state, stats} =
+      Flow.process_with_limits(
+        handlers,
+        signal,
+        %{},
+        timeout_ms: 5000,
+        # Return stats in the result
+        return_stats: true
+      )
 
     IO.puts("Result: #{result.type} -> #{inspect(result.data)}")
     IO.puts("\nExecution Statistics:")
@@ -105,12 +113,14 @@ defmodule Examples.LimitedWorkflow do
     signal = Signal.new(:task, "Important data")
 
     # Process with a short timeout - this should timeout
-    result = Flow.process_with_limits(
-      [slow_handler],
-      signal,
-      %{},
-      timeout_ms: 500 # Only 500ms timeout
-    )
+    result =
+      Flow.process_with_limits(
+        [slow_handler],
+        signal,
+        %{},
+        # Only 500ms timeout
+        timeout_ms: 500
+      )
 
     case result do
       {:error, error_message, _state} ->

@@ -11,7 +11,8 @@ defmodule AsyncWorkflow do
   def simulate_async_job(caller) do
     # Simulate a background job
     spawn(fn ->
-      Process.sleep(100)  # Very short sleep for example
+      # Very short sleep for example
+      Process.sleep(100)
       send(caller, {:job_complete, %{result: "Completed"}})
     end)
   end
@@ -30,7 +31,8 @@ defmodule AsyncWorkflow do
           message = "Job completed with result: #{inspect(result.result)}"
           {Signal.emit(:notification, message), state}
       after
-        2000 -> # Longer timeout to ensure we catch the message
+        # Longer timeout to ensure we catch the message
+        2000 ->
           {Signal.emit(:error, "Job timed out"), state}
       end
     end

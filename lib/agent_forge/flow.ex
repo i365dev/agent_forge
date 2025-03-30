@@ -2,6 +2,35 @@ defmodule AgentForge.Flow do
   @moduledoc """
   Provides functions for processing signals through a chain of handlers.
   Each handler is a function that takes a signal and state, and returns a tuple with result and new state.
+
+  ## Signal Processing
+
+  The Flow module supports flexible signal processing patterns through various options:
+
+  ### Signal Strategies
+
+  Control how signals flow through your handlers:
+
+  * `:forward` (default) - Passes signals unchanged to next handler
+  * `:transform` - Modifies signals before passing to next handler using `transform_fn`
+  * `:restart` - Allows handlers to restart the flow with a new signal
+
+  ### Skip Handling
+
+  * `continue_on_skip: false` (default) - A handler returning `:skip` will halt the chain
+  * `continue_on_skip: true` - Processing continues to next handler even after a skip
+
+  ### Branching
+
+  Handlers can implement conditional logic using the branch format:
+  `{:branch, condition, true_state, false_state}`
+
+  ### Execution Limits
+
+  * `max_steps` - Maximum number of steps to execute (prevents infinite loops)
+  * `timeout_ms` - Maximum execution time in milliseconds
+
+  See the examples directory for complete demonstrations of these features.
   """
 
   alias AgentForge.ExecutionStats
@@ -161,11 +190,43 @@ defmodule AgentForge.Flow do
   * `:timeout_ms` - Maximum time in milliseconds to process (default: 30000)
   * `:collect_stats` - Whether to collect execution statistics (default: true)
   * `:return_stats` - Whether to return statistics in the result (default: false)
+  * `:max_steps` - Maximum number of steps to execute (default: 100, prevents infinite loops)
   * `:continue_on_skip` - Whether to continue processing after a skip result (default: false)
-  * `:signal_strategy` - How to handle emitted signals: `:forward` (default), `:restart`, or `:transform`
+  * `:signal_strategy` - How to handle emitted signals:
+      - `:forward` (default) - Passes emitted signals unchanged to the next handler
+      - `:transform` - Transforms signals using the `transform_fn` before passing to next handler
+      - `:restart` - Allows handlers to restart the flow from the beginning with a new signal
   * `:transform_fn` - Function to transform signals when signal_strategy is `:transform`
 
-  ## Examples
+  ## Signal Strategies
+
+  ### Forward Strategy (Default)
+  ```elixir
+  # Signal passes unchanged to the next handler
+  Flow.process_with_limits(handlers, signal, state, signal_strategy: :forward)
+  ```
+
+  ### Transform Strategy
+  ```elixir
+  # Signal is transformed before passing to the next handler
+  transform_fn = fn signal -> Map.put(signal, :data, String.upcase(signal.data)) end
+  Flow.process_with_limits(handlers, signal, state, 
+    signal_strategy: :transform,
+    transform_fn: transform_fn
+  )
+  ```
+
+  ### Restart Strategy
+  ```elixir
+  # When a handler emits a signal, processing restarts from the first handler
+  # Useful for looping through handlers until a condition is met
+  Flow.process_with_limits(handlers, signal, state, 
+    signal_strategy: :restart,
+    max_steps: 10  # Always set max_steps to prevent infinite loops
+  )
+  ```
+
+  ## Basic Examples
 
       iex> handlers = [
       ...>   fn sig, st -> {{:emit, AgentForge.Signal.new(:echo, sig.data)}, st} end
