@@ -15,6 +15,20 @@ defmodule AgentForge.Flow do
   """
   @type flow :: (Signal.t(), map() -> {term(), map()}) | [(Signal.t(), map() -> {term(), map()})]
 
+  @doc """
+  Processes a signal through a list of handlers.
+  For backward compatibility, does not return statistics by default.
+
+  ## Examples
+
+      iex> handlers = [
+      ...>   fn sig, st -> {{:emit, AgentForge.Signal.new(:echo, sig.data)}, st} end
+      ...> ]
+      iex> signal = AgentForge.Signal.new(:test, "data")
+      iex> {:ok, result, _} = AgentForge.Flow.process(handlers, signal, %{})
+      iex> result.type
+      :echo
+  """
   def process(handlers, signal, state) when is_list(handlers) do
     # Call process_with_limits with default option to not return statistics
     # This ensures backward compatibility with existing code
@@ -33,7 +47,110 @@ defmodule AgentForge.Flow do
     error -> {:error, "Flow processing error: #{inspect(error)}"}
   end
 
-  def get_last_execution_stats, do: Process.get(@last_execution_stats_key)
+  @doc """
+  Process a signal using a function flow.
+
+  This allows defining a workflow as a function instead of a list of handlers.
+  The function should accept a signal and state, and return one of:
+
+  * `{:emit, new_signal, new_state}` - Emit a new signal and continue processing
+  * `{:skip, new_state}` - Skip processing this signal
+  * `{:halt, result, new_state}` - Halt processing with result
+  * `{:error, reason, new_state}` - Halt with an error
+
+  ## Options
+
+  Same as `process_with_limits/4`.
+
+  ## Example
+
+  ```elixir
+  function_flow = fn signal, state ->
+    case signal.type do
+      :start -> {:emit, Signal.new(:processing, signal.data), state}
+      :processing -> {:halt, "Done processing", state}
+      _ -> {:skip, state}
+    end
+  end
+
+  Flow.process_function_flow(function_flow, signal, state)
+  ```
+  """
+  def process_function_flow(flow_fn, signal, state, opts \\ []) when is_function(flow_fn, 2) do
+    # Extract options
+    timeout_ms = Keyword.get(opts, :timeout_ms, 30_000)
+    collect_stats = Keyword.get(opts, :collect_stats, true)
+    return_stats = Keyword.get(opts, :return_stats, false)
+
+    # Initialize statistics if enabled
+    stats = if collect_stats, do: ExecutionStats.new(), else: nil
+
+    # Create a task to execute the function flow with timeout
+    task =
+      Task.async(fn ->
+        try do
+          # Execute the function flow
+          result = flow_fn.(signal, state)
+          # Normalize result format
+          normalized_result = normalize_function_result(result, signal, state, stats)
+          {normalized_result, stats}
+        rescue
+          e ->
+            error_message = "Flow processing error: #{Exception.message(e)}"
+            {{:error, error_message, state, stats}, stats}
+        catch
+          _kind, e ->
+            error_message = "Flow processing error: #{inspect(e)}"
+            {{:error, error_message, state, stats}, stats}
+        end
+      end)
+
+    # Wait for the task to complete or timeout
+    case Task.yield(task, timeout_ms) || Task.shutdown(task) do
+      {:ok, {result, final_stats}} ->
+        format_result(result, state, final_stats, return_stats)
+
+      nil ->
+        # Timeout occurred
+        timeout_error = "Flow execution timed out after #{timeout_ms}ms"
+        format_timeout_error(timeout_error, state, stats, return_stats)
+    end
+  end
+
+  # Normalize result from function flow to match standard handler format
+  defp normalize_function_result(result, _signal, state, stats) do
+    case result do
+      {:emit, new_signal, new_state} ->
+        {:ok, new_signal, new_state, stats}
+
+      {:skip, new_state} ->
+        {:ok, nil, new_state, stats}
+
+      {:halt, value, new_state} ->
+        {:ok, value, new_state, stats}
+
+      {:error, reason, new_state} ->
+        {:error, reason, new_state, stats}
+
+      # Handle legacy result format
+      {signal_result, new_state} ->
+        case signal_result do
+          {:emit, new_signal} -> {:ok, new_signal, new_state, stats}
+          :skip -> {:ok, nil, new_state, stats}
+          {:halt, result} -> {:ok, result, new_state, stats}
+          {:error, reason} -> {:error, reason, new_state, stats}
+          _ -> {:error, "Invalid result format: #{inspect(signal_result)}", state, stats}
+        end
+
+      # State-only result (treat as a successful flow with no output signal)
+      %{} = new_state ->
+        {:ok, nil, new_state, stats}
+
+      # Unrecognized format
+      other ->
+        {:error, "Unrecognized flow result: #{inspect(other)}", state, stats}
+    end
+  end
 
   @doc """
   Processes a signal through a list of handlers with execution limits.
@@ -44,6 +161,9 @@ defmodule AgentForge.Flow do
   * `:timeout_ms` - Maximum time in milliseconds to process (default: 30000)
   * `:collect_stats` - Whether to collect execution statistics (default: true)
   * `:return_stats` - Whether to return statistics in the result (default: false)
+  * `:continue_on_skip` - Whether to continue processing after a skip result (default: false)
+  * `:signal_strategy` - How to handle emitted signals: `:forward` (default), `:restart`, or `:transform`
+  * `:transform_fn` - Function to transform signals when signal_strategy is `:transform`
 
   ## Examples
 
@@ -54,7 +174,7 @@ defmodule AgentForge.Flow do
       iex> {:ok, result, _} = AgentForge.Flow.process_with_limits(handlers, signal, %{})
       iex> result.type
       :echo
-      
+
   With statistics:
 
       iex> handlers = [
@@ -75,7 +195,7 @@ defmodule AgentForge.Flow do
     stats = if collect_stats, do: ExecutionStats.new(), else: nil
 
     # Create a task to process the signal with timeout
-    task = Task.async(fn -> execute_flow_safely(handlers, signal, state, stats) end)
+    task = Task.async(fn -> execute_flow_safely(handlers, signal, state, stats, opts) end)
 
     # Wait for the task to complete or timeout
     case Task.yield(task, timeout_ms) || Task.shutdown(task) do
@@ -90,29 +210,14 @@ defmodule AgentForge.Flow do
   end
 
   # Process with statistics collection
-  defp process_with_stats(handlers, signal, state, nil) do
+  defp process_with_stats(handlers, signal, state, nil, opts) do
     # No stats collection, use direct processing
-    {process_handlers(handlers, signal, state, collect_stats: false), nil}
+    {process_handlers(handlers, signal, state, Keyword.put(opts, :collect_stats, false)), nil}
   end
 
-  defp process_with_stats(handlers, signal, state, stats) do
-    # Process with statistics collection
-    result =
-      Enum.reduce_while(handlers, {:ok, signal, state, stats}, fn handler,
-                                                                  {:ok, current_signal,
-                                                                   current_state,
-                                                                   current_stats} ->
-        # Record step statistics
-        updated_stats =
-          ExecutionStats.record_step(current_stats, handler, current_signal, current_state)
-
-        # Process handler and handle result
-        handle_process_result(
-          process_handler(handler, current_signal, current_state),
-          current_state,
-          updated_stats
-        )
-      end)
+  defp process_with_stats(handlers, signal, state, stats, opts) do
+    # Pass options to process_handlers
+    result = process_handlers(handlers, signal, state, Keyword.put(opts, :collect_stats, true))
 
     # Extract stats from result
     {result,
@@ -178,12 +283,43 @@ defmodule AgentForge.Flow do
     {:error, error_msg, state}
   end
 
+  @doc """
+  Process a single handler with a signal and state.
+  This is the core function that executes a single handler.
+
+  ## Examples
+
+      iex> handler = fn sig, st -> {{:emit, AgentForge.Signal.new(:echo, sig.data)}, st} end
+      iex> signal = AgentForge.Signal.new(:test, "data")
+      iex> result = AgentForge.Flow.process_handler(handler, signal, %{})
+      iex> match?({_, _}, result)
+      true
+  """
   def process_handler(handler, signal, state) when is_function(handler, 2) do
     handler.(signal, state)
   end
 
+  # Process handlers with options for flow control.
+  #
+  # Handler Result Types:
+  #
+  # - `{{:emit, new_signal}, new_state}` - Handler emits a new signal to be processed
+  # - `{:skip, new_state}` - Handler skips processing this signal
+  # - `{{:error, reason}, new_state}` - Handler encounters an error
+  # - `{:branch, condition, true_state, false_state}` - Handler branches based on condition
+  #
+  # Options:
+  #
+  # * `:collect_stats` - Whether to collect execution statistics
+  # * `:continue_on_skip` - Whether to continue processing after a skip result
+  # * `:signal_strategy` - How to handle emitted signals: `:forward`, `:restart`, or `:transform`
+  # * `:transform_fn` - Function to transform signals when signal_strategy is `:transform`
   defp process_handlers(handlers, signal, state, opts) do
     collect_stats = Keyword.get(opts, :collect_stats, true)
+    continue_on_skip = Keyword.get(opts, :continue_on_skip, false)
+    signal_strategy = Keyword.get(opts, :signal_strategy, :forward)
+    transform_fn = Keyword.get(opts, :transform_fn, & &1)
+
     stats = if collect_stats, do: ExecutionStats.new(), else: nil
 
     Enum.reduce_while(handlers, {:ok, signal, state, stats}, fn handler,
@@ -197,15 +333,63 @@ defmodule AgentForge.Flow do
 
       # Process handler
       case process_handler(handler, current_signal, current_state) do
+        # Enhanced emit handling with signal strategies
         {{:emit, new_signal}, new_state} ->
-          {:cont, {:ok, new_signal, new_state, updated_stats}}
+          case signal_strategy do
+            :forward ->
+              # Default behavior: forward signal to next handler
+              {:cont, {:ok, new_signal, new_state, updated_stats}}
 
+            :restart ->
+              # Restart processing chain with new signal
+              result = process_handlers(handlers, new_signal, new_state, opts)
+              {:halt, result}
+
+            :transform ->
+              # Transform signal using provided function
+              transformed_signal = transform_fn.(new_signal)
+              {:cont, {:ok, transformed_signal, new_state, updated_stats}}
+          end
+
+        # Support for emit_many format
+        {{:emit_many, signals}, new_state} when is_list(signals) ->
+          # When multiple signals are emitted, use the last one for continuation
+          last_signal = List.last(signals)
+          {:cont, {:ok, last_signal, new_state, updated_stats}}
+
+        # Enhanced skip handling with continue_on_skip option
         {:skip, new_state} ->
-          {:halt, {:ok, nil, new_state, updated_stats}}
+          if continue_on_skip do
+            # Continue to next handler with current signal
+            {:cont, {:ok, current_signal, new_state, updated_stats}}
+          else
+            # Original behavior: halt processing
+            {:halt, {:ok, nil, new_state, updated_stats}}
+          end
 
+        # Error handling (unchanged)
         {{:error, reason}, new_state} ->
           {:halt, {:error, reason, new_state, updated_stats}}
 
+        # Support for alternative halt format
+        {:halt, result} ->
+          {:halt, {:ok, result, current_state, updated_stats}}
+
+        # Support for halt with state
+        {{:halt, result}, new_state} ->
+          {:halt, {:ok, result, new_state, updated_stats}}
+
+        # New branch control flow
+        {:branch, condition, true_state, false_state} ->
+          if condition do
+            # Take the true branch
+            {:cont, {:ok, current_signal, true_state, updated_stats}}
+          else
+            # Take the false branch
+            {:cont, {:ok, current_signal, false_state, updated_stats}}
+          end
+
+        # Invalid result handling
         other ->
           raise "Invalid handler result: #{inspect(other)}"
       end
@@ -274,8 +458,8 @@ defmodule AgentForge.Flow do
   end
 
   # Safely executes a flow with exception handling
-  defp execute_flow_safely(handlers, signal, state, stats) do
-    process_with_stats(handlers, signal, state, stats)
+  defp execute_flow_safely(handlers, signal, state, stats, opts) do
+    process_with_stats(handlers, signal, state, stats, opts)
   rescue
     error ->
       error_message = "Flow processing error: #{inspect(error)}"
@@ -288,33 +472,5 @@ defmodule AgentForge.Flow do
       {error_result, stats}
   end
 
-  # Helper function to handle results from process_handler
-  defp handle_process_result(result, current_state, updated_stats) do
-    case result do
-      {{:emit, new_signal}, new_state} ->
-        {:cont, {:ok, new_signal, new_state, updated_stats}}
-
-      {{:emit_many, signals}, new_state} when is_list(signals) ->
-        # When multiple signals are emitted, use the last one for continuation
-        {:cont, {:ok, List.last(signals), new_state, updated_stats}}
-
-      {:skip, new_state} ->
-        {:halt, {:ok, nil, new_state, updated_stats}}
-
-      {:halt, data} ->
-        {:halt, {:ok, data, current_state, updated_stats}}
-
-      {{:halt, data}, _state} ->
-        {:halt, {:ok, data, current_state, updated_stats}}
-
-      {{:error, reason}, new_state} ->
-        {:halt, {:error, reason, new_state, updated_stats}}
-
-      {other, _} ->
-        raise "Invalid handler result: #{inspect(other)}"
-
-      other ->
-        raise "Invalid handler result: #{inspect(other)}"
-    end
-  end
+  def get_last_execution_stats, do: Process.get(@last_execution_stats_key)
 end

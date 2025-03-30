@@ -3,7 +3,7 @@
 # This example demonstrates a simple data processing pipeline using AgentForge primitives
 # to validate, transform, and aggregate data.
 #
-# To run: elixir examples/data_processing.exs
+# To run: mix run examples/data_processing.exs
 
 defmodule DataProcessing do
   alias AgentForge.{Flow, Signal, Primitives}

@@ -3,7 +3,7 @@
 # This example demonstrates how to use the wait primitive to handle
 # asynchronous operations in a workflow.
 #
-# To run: elixir examples/async_workflow.exs
+# To run: mix run examples/async_workflow.exs
 
 defmodule AsyncWorkflow do
   alias AgentForge.{Flow, Signal}

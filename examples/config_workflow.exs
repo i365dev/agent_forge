@@ -3,7 +3,7 @@
 # This example demonstrates how to define and run workflows using YAML configuration.
 # See examples/workflows/sample.yaml for the workflow definition.
 #
-# To run: elixir examples/config_workflow.exs
+# To run: mix run examples/config_workflow.exs
 
 defmodule ConfigWorkflow do
   alias AgentForge.{Flow, Signal, Primitives}
