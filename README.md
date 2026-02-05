@@ -211,3 +211,13 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## About the Author
+
+This project is maintained by the creator of **MyInvestPilot** —
+a systematic investment assistance platform focused on
+rule-based, long-term investing and transparent strategy research.
+
+🔗 https://www.myinvestpilot.com
